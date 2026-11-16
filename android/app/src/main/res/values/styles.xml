@@ -1,0 +1,11 @@
+<resources>
+    <style name="Theme.ANE.Base" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#17654C</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#F4F6F3</item>
+        <item name="android:navigationBarColor">#17654C</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+    <style name="Theme.ANE" parent="Theme.ANE.Base" />
+</resources>

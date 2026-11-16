@@ -1,0 +1,17 @@
+.git
+.env*
+android
+dist
+.idea
+.gradle
+**/node_modules
+**/*.tsbuildinfo
+*.log
+ane
+
+.local
+releases
+backups
+*.dump
+*.pem
+*.key
