@@ -16,8 +16,7 @@ type Order struct {
 	TradeNo          string     `json:"trade_no"`
 	MerchantID       int64      `json:"merchant_id"`
 	AppID            string     `json:"app_id"`
-	Username         string     `json:"username"`
-	Payer            string     `json:"payer"`
+	PaymentType      string     `json:"payment_type"`
 	OutTradeNo       string     `json:"out_trade_no"`
 	Name             string     `json:"name"`
 	Amount           int64      `json:"amount_cents"`
@@ -36,11 +35,11 @@ type Order struct {
 	CallbackResult   string     `json:"callback_result"`
 }
 
-const orderColumns = "trade_no,merchant_id,app_id,username,out_trade_no,name,amount,pay_amount,discount,merchant_key,notify_url,return_url,param,status,created_at,expires_at,paid_at,callback_status,callback_attempts,callback_result,coalesce((SELECT e.payer FROM events e WHERE e.id=orders.event_id),'')"
+const orderColumns = "trade_no,merchant_id,app_id,payment_type,out_trade_no,name,amount,pay_amount,discount,merchant_key,notify_url,return_url,param,status,created_at,expires_at,paid_at,callback_status,callback_attempts,callback_result"
 
 func scanOrder(row pgx.Row) (Order, error) {
 	var o Order
-	err := row.Scan(&o.TradeNo, &o.MerchantID, &o.AppID, &o.Username, &o.OutTradeNo, &o.Name, &o.Amount, &o.PayAmount, &o.Discount, &o.Key, &o.NotifyURL, &o.ReturnURL, &o.Param, &o.Status, &o.CreatedAt, &o.ExpiresAt, &o.PaidAt, &o.CallbackStatus, &o.CallbackAttempts, &o.CallbackResult, &o.Payer)
+	err := row.Scan(&o.TradeNo, &o.MerchantID, &o.AppID, &o.PaymentType, &o.OutTradeNo, &o.Name, &o.Amount, &o.PayAmount, &o.Discount, &o.Key, &o.NotifyURL, &o.ReturnURL, &o.Param, &o.Status, &o.CreatedAt, &o.ExpiresAt, &o.PaidAt, &o.CallbackStatus, &o.CallbackAttempts, &o.CallbackResult)
 	if err == nil && o.Status == "pending" && time.Now().After(o.ExpiresAt) {
 		o.Status = "expired"
 	}
@@ -74,10 +73,10 @@ func (a *App) createOrder(ctx context.Context, m Merchant, v url.Values) (Order,
 	if amount < 1 {
 		return zero, orderInputError{errors.New("订单原金额至少为 0.01 元")}
 	}
-	if v.Get("type") != "alipay" {
-		return zero, orderInputError{errors.New("仅支持 alipay")}
+	if v.Get("type") != "alipay" && v.Get("type") != "wxpay" {
+		return zero, orderInputError{errors.New("仅支持 alipay / wxpay")}
 	}
-	if len(v.Get("out_trade_no")) < 1 || len(v.Get("out_trade_no")) > 128 || len(v.Get("name")) < 1 || len(v.Get("name")) > 256 || len(v.Get("param")) > 2048 || len(v.Get("username")) > 256 {
+	if len(v.Get("out_trade_no")) < 1 || len(v.Get("out_trade_no")) > 128 || len(v.Get("name")) < 1 || len(v.Get("name")) > 256 || len(v.Get("param")) > 2048 {
 		return zero, orderInputError{errors.New("订单号、商品或附加参数无效")}
 	}
 	if err = a.validateCallbackURL(v.Get("notify_url")); err != nil {
@@ -120,7 +119,7 @@ func (a *App) createOrder(ctx context.Context, m Merchant, v url.Values) (Order,
 	m = current
 	old, err := scanOrder(tx.QueryRow(ctx, "SELECT "+orderColumns+" FROM orders WHERE merchant_id=$1 AND app_id=$2 AND out_trade_no=$3", m.ID, m.AppID, v.Get("out_trade_no")))
 	if err == nil {
-		if old.Amount != amount || old.Name != v.Get("name") || old.NotifyURL != v.Get("notify_url") || old.ReturnURL != v.Get("return_url") || old.Param != v.Get("param") || old.Username != v.Get("username") {
+		if old.Amount != amount || old.Name != v.Get("name") || old.NotifyURL != v.Get("notify_url") || old.ReturnURL != v.Get("return_url") || old.Param != v.Get("param") || old.PaymentType != v.Get("type") {
 			return zero, errDifferentOrder
 		}
 		return old, nil
@@ -128,8 +127,11 @@ func (a *App) createOrder(ctx context.Context, m Merchant, v url.Values) (Order,
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return zero, err
 	}
+	if v.Get("type") == "wxpay" {
+		m.QR = m.WechatQR
+	}
 	if m.QR == "" {
-		return zero, orderInputError{errors.New("商户尚未配置收款码")}
+		return zero, orderInputError{errors.New("商户尚未配置该支付渠道的收款码")}
 	}
 	if err = syncPools(ctx, tx, m.ID); err != nil {
 		return zero, err
@@ -142,8 +144,8 @@ func (a *App) createOrder(ctx context.Context, m Merchant, v url.Values) (Order,
 	if err != nil {
 		return zero, err
 	}
-	o, err := scanOrder(tx.QueryRow(ctx, `INSERT INTO orders(trade_no,merchant_id,out_trade_no,name,amount,pay_amount,discount,merchant_key,notify_url,return_url,param,qr_image,payment_note,expires_at,app_id,username)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,clock_timestamp()+make_interval(mins=>$14),$15,$16) RETURNING `+orderColumns, token()[:32], m.ID, v.Get("out_trade_no"), v.Get("name"), amount, amount-int64(discount), discount, m.Key, v.Get("notify_url"), v.Get("return_url"), v.Get("param"), m.QR, m.PaymentNote, m.TTL, m.AppID, v.Get("username")))
+	o, err := scanOrder(tx.QueryRow(ctx, `INSERT INTO orders(trade_no,merchant_id,out_trade_no,name,amount,pay_amount,discount,merchant_key,notify_url,return_url,param,qr_image,payment_note,expires_at,app_id,payment_type)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,clock_timestamp()+make_interval(mins=>$14),$15,$16) RETURNING `+orderColumns, token()[:32], m.ID, v.Get("out_trade_no"), v.Get("name"), amount, amount-int64(discount), discount, m.Key, v.Get("notify_url"), v.Get("return_url"), v.Get("param"), m.QR, m.PaymentNote, m.TTL, m.AppID, v.Get("type")))
 	if err != nil {
 		return zero, err
 	}
@@ -325,10 +327,10 @@ func epayOrder(o Order) map[string]any {
 	if o.PaidAt != nil {
 		end = o.PaidAt.Format("2006-01-02 15:04:05")
 	}
-	return map[string]any{"code": 1, "pid": o.MerchantID, "trade_no": o.TradeNo, "out_trade_no": o.OutTradeNo, "type": "alipay", "name": o.Name, "money": core.Money(o.Amount), "pay_money": core.Money(o.PayAmount), "discount": core.Money(int64(o.Discount)), "status": status, "addtime": o.CreatedAt.Format("2006-01-02 15:04:05"), "endtime": end, "param": o.Param}
+	return map[string]any{"code": 1, "pid": o.MerchantID, "trade_no": o.TradeNo, "out_trade_no": o.OutTradeNo, "type": o.PaymentType, "name": o.Name, "money": core.Money(o.Amount), "pay_money": core.Money(o.PayAmount), "discount": core.Money(int64(o.Discount)), "status": status, "addtime": o.CreatedAt.Format("2006-01-02 15:04:05"), "endtime": end, "param": o.Param}
 }
 func callbackValues(o Order) url.Values {
-	v := url.Values{"pid": {strconv.FormatInt(o.MerchantID, 10)}, "trade_no": {o.TradeNo}, "out_trade_no": {o.OutTradeNo}, "type": {"alipay"}, "name": {o.Name}, "money": {core.Money(o.Amount)}, "trade_status": {"TRADE_SUCCESS"}, "param": {o.Param}}
+	v := url.Values{"pid": {strconv.FormatInt(o.MerchantID, 10)}, "trade_no": {o.TradeNo}, "out_trade_no": {o.OutTradeNo}, "type": {o.PaymentType}, "name": {o.Name}, "money": {core.Money(o.Amount)}, "trade_status": {"TRADE_SUCCESS"}, "param": {o.Param}}
 	v.Set("sign", core.Sign(v, o.Key))
 	v.Set("sign_type", "MD5")
 	return v
@@ -360,7 +362,7 @@ func (a *App) payStatus(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, err)
 		return
 	}
-	respond(w, 200, map[string]any{"payment_note": sanitizePaymentNote(note), "code": 1, "trade_no": o.TradeNo, "out_trade_no": o.OutTradeNo, "name": o.Name, "amount_cents": o.Amount, "pay_amount_cents": o.PayAmount, "discount_cents": o.Discount, "status": o.Status, "expires_at": o.ExpiresAt, "server_time": time.Now(), "return_url": returnLink(o)})
+	respond(w, 200, map[string]any{"payment_type": o.PaymentType, "payment_note": sanitizePaymentNote(note), "code": 1, "trade_no": o.TradeNo, "out_trade_no": o.OutTradeNo, "name": o.Name, "amount_cents": o.Amount, "pay_amount_cents": o.PayAmount, "discount_cents": o.Discount, "status": o.Status, "expires_at": o.ExpiresAt, "server_time": time.Now(), "return_url": returnLink(o)})
 }
 func (a *App) collectionQR(w http.ResponseWriter, r *http.Request) {
 	var s string
@@ -382,5 +384,5 @@ func (a *App) collectionQR(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(b)
 }
 func orderMessage(o Order) string {
-	return fmt.Sprintf("订单 %s，实收 %s 元，用户 %s\n应用：%s\n原金额 %s 元，优惠 %s 元。", o.OutTradeNo, core.Money(o.PayAmount), o.Username, o.AppID, core.Money(o.Amount), core.Money(int64(o.Discount)))
+	return fmt.Sprintf("订单 %s，实收 %s 元，渠道 %s\n应用：%s\n原金额 %s 元，优惠 %s 元。", o.OutTradeNo, core.Money(o.PayAmount), core.PaymentLabel(o.PaymentType), o.AppID, core.Money(o.Amount), core.Money(int64(o.Discount)))
 }

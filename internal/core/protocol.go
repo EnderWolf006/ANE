@@ -68,15 +68,56 @@ func ParseMoney(s string) (int64, error) {
 }
 func Money(cents int64) string { return fmt.Sprintf("%d.%02d", cents/100, cents%100) }
 
-var noticePattern = regexp.MustCompile(`^(.{1,100}?)通过扫码向你付款((?:0|[1-9][0-9]{0,5})(?:\.[0-9]{1,2})?)元[。！!]?\s*$`)
+const AlipayPackage = "com.eg.android.AlipayGphone"
+const WechatPackage = "com.tencent.mm"
 
-func ParseNotice(text string) (string, int64, error) {
-	m := noticePattern.FindStringSubmatch(strings.TrimSpace(text))
-	if m == nil {
-		return "", 0, errors.New("不符合支付宝扫码付款通知格式")
+func PaymentType(packageName string) string {
+	switch packageName {
+	case AlipayPackage:
+		return "alipay"
+	case WechatPackage:
+		return "wxpay"
 	}
-	amount, err := ParseMoney(m[2])
-	return m[1], amount, err
+	return ""
+}
+func PaymentLabel(paymentType string) string {
+	if paymentType == "wxpay" {
+		return "微信支付"
+	}
+	return "支付宝"
+}
+
+// Match a positive receipt phrase and one exact monetary amount. Names and
+// surrounding marketing/customer labels are deliberately not parsed or stored.
+var alipayReceipt = regexp.MustCompile(`(?:通过扫码向你付款|向你付款|成功收款|收款成功|收款|到账)[：:\s]*[¥￥]?[\s]*([0-9][0-9.,]*)[\s]*元`)
+var wechatReceipt = regexp.MustCompile(`微信(?:支付)?收款[：:\s]*[¥￥]?[\s]*([0-9][0-9.,]*)[\s]*元`)
+var monetaryAmount = regexp.MustCompile(`[0-9][0-9.,]*[\s]*元`)
+var negativeReceipt = regexp.MustCompile(`退款|退还|收款失败|支付失败|收款取消|交易关闭|待收款|待付款|待支付|付款请求`)
+
+func ParseNotice(packageName, text string) (int64, error) {
+	pattern := alipayReceipt
+	if PaymentType(packageName) == "" {
+		return 0, errors.New("不支持的收款通知来源")
+	}
+	if packageName == WechatPackage {
+		pattern = wechatReceipt
+	} else if strings.Contains(text, "微信") {
+		return 0, errors.New("支付渠道与通知来源不符")
+	}
+	if negativeReceipt.MatchString(text) || len(monetaryAmount.FindAllString(text, -1)) != 1 {
+		return 0, errors.New("通知未明确成功收款或包含多个金额")
+	}
+	matches := pattern.FindAllStringSubmatch(text, -1)
+	if len(matches) != 1 {
+		return 0, errors.New("未识别到成功收款金额")
+	}
+	return ParseMoney(matches[0][1])
+}
+func ReceiptText(paymentType string, amount int64) string {
+	if amount <= 0 {
+		return PaymentLabel(paymentType) + "通知（未识别金额，原文不保留）"
+	}
+	return PaymentLabel(paymentType) + "收款 " + Money(amount) + " 元"
 }
 
 func ValidateURL(raw string) error {

@@ -139,7 +139,7 @@ private fun openSetting(context: Context, intent: Intent) {
                             Column(Modifier.fillMaxWidth().padding(25.dp)) {
                                 Text("YOUR PAYMENTS, CONNECTED.", fontSize = 9.sp, letterSpacing = 1.5.sp, color = Muted)
                                 Spacer(Modifier.height(15.dp)); Text("每一笔收款，\n都有迹可循。", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, lineHeight = 40.sp)
-                                Spacer(Modifier.height(12.dp)); Text("监听支付宝收款通知，安全连接你的支付服务。", fontSize = 12.sp, color = Muted)
+                                Spacer(Modifier.height(12.dp)); Text("监听支付宝与微信收款通知，安全连接你的支付服务。", fontSize = 12.sp, color = Muted)
                             }
                         }
                     }
@@ -150,9 +150,9 @@ private fun openSetting(context: Context, intent: Intent) {
                             Metric("已匹配", snapshot.events.count { it.state == "matched" }.toString(), "最近 500 条已处理记录", Modifier.weight(1f))
                         }
                     }
-                    item { AneCard("监听开关") { Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(if (snapshot.config.enabled) "已启用后台收款监听" else "开启自动上报", fontSize = 14.sp, fontWeight = FontWeight.Medium); Text("通知先存盘，再发送至服务端", color = Muted, fontSize = 11.sp) }; Switch(checked = snapshot.config.enabled, onCheckedChange = { vm.toggle(it) }, enabled = !busy && folder != null && storageError == null) }; if (!access) { Spacer(Modifier.height(8.dp)); TextButton(onClick = { openSetting(context, Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }) { Text("授予支付宝通知访问权限 →") } } } }
+                    item { AneCard("监听开关") { Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(if (snapshot.config.enabled) "已启用后台收款监听" else "开启自动上报", fontSize = 14.sp, fontWeight = FontWeight.Medium); Text("通知先存盘，再发送至服务端", color = Muted, fontSize = 11.sp) }; Switch(checked = snapshot.config.enabled, onCheckedChange = { vm.toggle(it) }, enabled = !busy && folder != null && storageError == null) }; if (!access) { Spacer(Modifier.height(8.dp)); TextButton(onClick = { openSetting(context, Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }) { Text("授予收款通知访问权限 →") } } } }
                     item { AneCard("连接状态") { InfoRow("服务端", snapshot.config.serverUrl.ifEmpty { "尚未配置" }); InfoRow("连接结果", snapshot.connection); InfoRow("最近心跳", timestamp(snapshot.lastHeartbeat)); Spacer(Modifier.height(10.dp)); OutlinedButton(onClick = { vm.testConnection() }, enabled = !busy && folder != null) { Text("测试服务端连接") } } }
-                    item { Text("ANE 根据系统通知匹配订单。支付记录与资金到账请以支付宝账单为准。", color = Muted, fontSize = 10.sp, lineHeight = 17.sp) }
+                    item { Text("ANE 根据系统通知匹配订单。支付记录与资金到账请以支付宝或微信账单为准。", color = Muted, fontSize = 10.sp, lineHeight = 17.sp) }
                 }
                 1 -> ConfigScreen(snapshot, folder, busy, { pickFolder() }, vm) { scope.launch { snackbar.showSnackbar(it) } }
                 2 -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

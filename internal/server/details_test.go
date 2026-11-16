@@ -134,7 +134,7 @@ func TestUpgradeV2PreservesOrders(t *testing.T) {
 	defer upgraded.Close()
 	var version int
 	_ = upgraded.db.QueryRow(ctx, "SELECT max(version) FROM schema_version").Scan(&version)
-	if version != 5 {
+	if version != 6 {
 		t.Fatal(version)
 	}
 	var pay int64

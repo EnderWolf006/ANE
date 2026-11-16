@@ -69,9 +69,9 @@ object SharedStore {
         } catch (e: Exception) { storageError.value = "共享存储写入失败：${e.message}"; throw e }
     }
     fun log(message: String) = update { it.copy(logs = it.logs + LogEntry(System.currentTimeMillis(), message)) }
-    fun record(notificationId: String, text: String, postedAt: Long) {
-        val parsed = NoticeParser.parse(text) ?: return
-        val id = sha256("com.eg.android.AlipayGphone|$text|$postedAt")
-        update { s -> if (s.events.any { it.id == id }) s else s.copy(events = s.events + PaymentEvent(id, notificationId, text, postedAt, parsed.cents), logs = s.logs + LogEntry(System.currentTimeMillis(), "收到付款通知 ¥${"%.2f".format(parsed.cents / 100.0)}，已存入上报队列")) }
+    fun record(packageName: String, notificationId: String, text: String, postedAt: Long) {
+        val parsed = NoticeParser.parse(packageName, text) ?: return
+        val id = sha256("$packageName|$notificationId|$postedAt|${parsed.cents}")
+        update { s -> if (s.events.any { it.id == id || (it.packageName == packageName && it.notificationId == notificationId && it.postedAt == postedAt) }) s else s.copy(events = s.events + PaymentEvent(id, notificationId, NoticeParser.receipt(packageName, parsed.cents), postedAt, parsed.cents, packageName = packageName), logs = s.logs + LogEntry(System.currentTimeMillis(), "收到付款通知 ¥${"%.2f".format(parsed.cents / 100.0)}，已存入上报队列")) }
     }
 }

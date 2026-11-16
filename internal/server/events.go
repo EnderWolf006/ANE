@@ -26,7 +26,7 @@ func (a *App) deviceEvent(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	if in.Package != "com.eg.android.AlipayGphone" || len(in.Text) > 2048 || len(in.NotificationID) < 1 || len(in.NotificationID) > 512 || in.PostedAt <= 0 {
+	if core.PaymentType(in.Package) == "" || len(in.Text) > 2048 || len(in.NotificationID) < 1 || len(in.NotificationID) > 512 || in.PostedAt <= 0 {
 		fail(w, 400, "通知参数或来源包名无效")
 		return
 	}
@@ -38,7 +38,9 @@ func (a *App) deviceEvent(w http.ResponseWriter, r *http.Request) {
 	canonical, _ := json.Marshal([]any{in.Package, strings.TrimSpace(in.Text), in.PostedAt})
 	fingerprint := digest(string(canonical))
 	id := token()[:32]
-	payer, amount, parseErr := core.ParseNotice(in.Text)
+	paymentType := core.PaymentType(in.Package)
+	amount, parseErr := core.ParseNotice(in.Package, in.Text)
+	receipt := core.ReceiptText(paymentType, amount)
 	status, reason := "unmatched", "没有符合金额及原始通知时间的订单"
 	if parseErr != nil {
 		status = "ignored"
@@ -69,7 +71,7 @@ func (a *App) deviceEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	var existingID, existingStatus string
 	var existingTrade *string
-	err = tx.QueryRow(r.Context(), "SELECT id,status,trade_no FROM events WHERE merchant_id=$1 AND fingerprint=$2", d.MerchantID, fingerprint).Scan(&existingID, &existingStatus, &existingTrade)
+	err = tx.QueryRow(r.Context(), "SELECT id,status,trade_no FROM events WHERE merchant_id=$1 AND (fingerprint=$2 OR (notification_id=$3 AND posted_at=$4 AND payment_type=$5))", d.MerchantID, fingerprint, in.NotificationID, posted, paymentType).Scan(&existingID, &existingStatus, &existingTrade)
 	if err == nil {
 		if err = tx.Commit(r.Context()); err != nil {
 			a.internal(w, err)
@@ -89,7 +91,7 @@ func (a *App) deviceEvent(w http.ResponseWriter, r *http.Request) {
 	var matched *Order
 	if status == "unmatched" {
 		// Include paid history before choosing: a stale/reposted notification must never consume a reused slot.
-		rows, e := tx.Query(r.Context(), "SELECT "+orderColumns+" FROM orders WHERE merchant_id=$1 AND pay_amount=$2 AND created_at<=$3 AND expires_at>=$3 FOR UPDATE", d.MerchantID, amount, posted)
+		rows, e := tx.Query(r.Context(), "SELECT "+orderColumns+" FROM orders WHERE merchant_id=$1 AND pay_amount=$2 AND payment_type=$4 AND created_at<=$3 AND expires_at>=$3 FOR UPDATE", d.MerchantID, amount, posted, paymentType)
 		if e != nil {
 			a.internal(w, e)
 			return
@@ -115,7 +117,7 @@ func (a *App) deviceEvent(w http.ResponseWriter, r *http.Request) {
 			status = "matched"
 			reason = "实际金额及通知时间匹配"
 		} else if len(candidates) > 1 {
-			reason = "金额复用后的时间窗口存在歧义，请核对支付宝账单"
+			reason = "金额复用后的时间窗口存在歧义，请核对支付账单"
 		} else if len(candidates) == 1 {
 			reason = "对应时段的订单已经支付，未重复入账"
 		}
@@ -124,7 +126,7 @@ func (a *App) deviceEvent(w http.ResponseWriter, r *http.Request) {
 	if matched != nil {
 		trade = matched.TradeNo
 	}
-	_, err = tx.Exec(r.Context(), `INSERT INTO events(id,merchant_id,fingerprint,notification_id,raw_text,payer,amount,posted_at,status,reason,trade_no) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, id, d.MerchantID, fingerprint, in.NotificationID, in.Text, payer, amount, posted, status, reason, trade)
+	_, err = tx.Exec(r.Context(), `INSERT INTO events(id,merchant_id,fingerprint,notification_id,raw_text,payment_type,amount,posted_at,status,reason,trade_no) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, id, d.MerchantID, fingerprint, in.NotificationID, receipt, paymentType, amount, posted, status, reason, trade)
 	if err != nil {
 		a.internal(w, err)
 		return
@@ -142,7 +144,7 @@ func (a *App) deviceEvent(w http.ResponseWriter, r *http.Request) {
 		}
 		err = queueNotification(r.Context(), tx, d.MerchantID, "payment_received", "paid:"+matched.TradeNo, "收款成功", orderMessage(*matched))
 	} else if status == "unmatched" {
-		err = queueNotification(r.Context(), tx, d.MerchantID, "payment_unmatched", "unmatched:"+id, "收款通知未匹配", in.Text+"\n"+reason)
+		err = queueNotification(r.Context(), tx, d.MerchantID, "payment_unmatched", "unmatched:"+id, "收款通知未匹配", receipt+"\n"+reason)
 	}
 	if err != nil {
 		a.internal(w, err)

@@ -55,7 +55,7 @@ object Reporter {
                 if (!current.enabled) break
                 try {
                     val result = post("/api/device/events", JSONObject().put("notification_id", event.notificationId)
-                        .put("package", "com.eg.android.AlipayGphone").put("text", event.text).put("posted_at", event.postedAt), current)
+                        .put("package", event.packageName).put("text", event.text).put("posted_at", event.postedAt), current)
                     if (result.status in 200..299 && result.body.optInt("code") == 1) {
                         val state = result.body.optString("status", "sent")
                         SharedStore.update { s -> s.copy(events = s.events.map { if (it.id == event.id) it.copy(state = state, result = result.body.optString("reason", if (result.body.optBoolean("duplicate")) "重复通知，服务端已去重" else "服务端已接收"), attempts = it.attempts + 1) else it }) }

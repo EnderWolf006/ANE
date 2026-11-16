@@ -8,7 +8,7 @@ class SnapshotTest {
         val original = Snapshot(
             revision = 42,
             config = AppConfig("https://pay.example.com", "a".repeat(64), true, 30),
-            events = listOf(PaymentEvent("id", "alipay-key", "张**通过扫码向你付款0.01元", 1700000000000, 1, attempts = 3, nextAttemptAt = 1700000060000), PaymentEvent("id2", "key2", "李四通过扫码向你付款1元", 1700000000001, 100, "matched", "已匹配", 1)),
+            events = listOf(PaymentEvent("id", "alipay-key", "支付宝收款 0.01 元", 1700000000000, 1, attempts = 3, nextAttemptAt = 1700000060000), PaymentEvent("id2", "key2", "微信支付收款 1.00 元", 1700000000001, 100, "matched", "已匹配", 1, packageName = NoticeParser.WECHAT)),
             logs = listOf(LogEntry(1700000000000, "包含中文的日志")),
             lastHeartbeat = 1700000000002,
             connection = "连接正常"
@@ -24,6 +24,16 @@ class SnapshotTest {
         assertTrue(restored.config.enabled)
         json.getJSONObject("config").put("report_interval_seconds", 999)
         assertEquals(120, Snapshot.decode(json.toString()).config.reportIntervalSeconds)
+    }
+    @Test fun legacyReceiptsRemoveNamesAndKeepOfflineQueue() {
+        val json = org.json.JSONObject(Snapshot(events = listOf(PaymentEvent("old-id", "old-notification", "张三通过扫码向你付款1元", 1700000000000, 100, attempts = 2))).encode())
+        json.getJSONArray("events").getJSONObject(0).remove("package")
+        val event = Snapshot.decode(json.toString()).events.single()
+        assertEquals("支付宝收款 1.00 元", event.text)
+        assertEquals(NoticeParser.ALIPAY, event.packageName)
+        assertEquals("old-id", event.id)
+        assertEquals(2, event.attempts)
+        assertEquals("pending", event.state)
     }
     @Test fun rejectsTruncatedOrUnknownVersion() {
         listOf("{", "{}", "{\"schema\":999}", Snapshot().encode().dropLast(10)).forEach { text ->

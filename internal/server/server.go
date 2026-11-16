@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-//go:embed schema.sql migrate_v3.sql migrate_v4.sql migrate_v5.sql web
+//go:embed schema.sql migrate_v3.sql migrate_v4.sql migrate_v5.sql migrate_v6.sql web
 var files embed.FS
 
 type App struct {
@@ -70,7 +70,7 @@ func New(ctx context.Context, c Config) (*App, error) {
 		if err = tx.QueryRow(ctx, "SELECT max(version) FROM schema_version").Scan(&version); err != nil {
 			return failNew(err)
 		}
-		if version != 2 && version != 3 && version != 4 && version != 5 {
+		if version != 2 && version != 3 && version != 4 && version != 5 && version != 6 {
 			return failNew(errors.New("ANE v2 requires a new empty database; existing schema is not modified"))
 		}
 		if version == 2 {
@@ -98,7 +98,17 @@ func New(ctx context.Context, c Config) (*App, error) {
 				return failNew(err)
 			}
 		}
+		if version <= 5 {
+			if _, err = tx.Exec(ctx, "SET LOCAL lock_timeout='5s'"); err != nil {
+				return failNew(err)
+			}
+			migration, _ := files.ReadFile("migrate_v6.sql")
+			if _, err = tx.Exec(ctx, string(migration)); err != nil {
+				return failNew(err)
+			}
+		}
 	}
+
 	schema, _ := files.ReadFile("schema.sql")
 	if _, err = tx.Exec(ctx, string(schema)); err != nil {
 		return failNew(err)
@@ -157,7 +167,7 @@ func fail(w http.ResponseWriter, status int, msg string) {
 	respond(w, status, map[string]any{"code": -1, "msg": msg})
 }
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, 4<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, 8<<20)
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(v); err != nil {
@@ -183,7 +193,7 @@ func (a *App) Handler() http.Handler {
 			fail(w, 503, "database unavailable")
 			return
 		}
-		respond(w, 200, map[string]string{"status": "ok", "version": "2.3.1"})
+		respond(w, 200, map[string]string{"status": "ok", "version": "2.4.0"})
 	})
 	mux.HandleFunc("POST /api/auth/login", a.login)
 	mux.Handle("/api/manage/", a.auth(http.HandlerFunc(a.manageAPI)))

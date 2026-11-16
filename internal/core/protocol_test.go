@@ -44,13 +44,34 @@ func TestMoney(t *testing.T) {
 	}
 }
 func TestNotice(t *testing.T) {
-	payer, cents, err := ParseNotice("张**通过扫码向你付款0.01元")
-	if err != nil || payer != "张**" || cents != 1 {
-		t.Fatalf("%s %d %v", payer, cents, err)
+	for _, tc := range []struct {
+		pkg, text string
+		cents     int64
+	}{
+		{AlipayPackage, "张**通过扫码向你付款0.01元", 1},
+		{AlipayPackage, "你已成功收款0.01元.\n已转入余额 做生意收钱提现免费>>", 1},
+		{AlipayPackage, "支付宝到账 12.3 元！", 1230},
+		{AlipayPackage, "收款成功：￥999999.99元（商家收款）", 99999999},
+		{WechatPackage, "[4条]微信收款助手: 微信支付收款0.01元(朋友到店)", 1},
+		{WechatPackage, "微信支付收款0.01元(老顾客第3次消费)", 1},
+		{WechatPackage, "微信收款：12.30元", 1230},
+	} {
+		got, err := ParseNotice(tc.pkg, tc.text)
+		if err != nil || got != tc.cents {
+			t.Errorf("%s: %d %v", tc.text, got, err)
+		}
 	}
-	for _, s := range []string{"支付宝到账0.01元", "张三通过扫码向你付款0.00元", "张三通过扫码向你付款1.001元", "通过扫码向你付款1元", "张三通过扫码向你付款01.01元", "张三通过扫码向你付款1元 其他文本"} {
-		if _, _, err := ParseNotice(s); err == nil {
-			t.Errorf("accepted invalid %q", s)
+	for _, tc := range []struct{ pkg, text string }{
+		{AlipayPackage, "张三通过扫码向你付款0.00元"}, {AlipayPackage, "成功收款1.001元"},
+		{AlipayPackage, "成功收款01.01元"}, {AlipayPackage, "成功收款1000000元"},
+		{AlipayPackage, "退款到账1元"}, {AlipayPackage, "收款失败1元"},
+		{AlipayPackage, "待付款1元"}, {AlipayPackage, "成功收款1元，余额2元"},
+		{WechatPackage, "微信支付收款1元；微信支付收款1元"},
+		{WechatPackage, "张三通过扫码向你付款1元"}, {AlipayPackage, "微信支付收款1元"},
+		{"com.other.app", "微信支付收款1元"},
+	} {
+		if _, err := ParseNotice(tc.pkg, tc.text); err == nil {
+			t.Errorf("accepted %s: %s", tc.pkg, tc.text)
 		}
 	}
 }

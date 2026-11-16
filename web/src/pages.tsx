@@ -122,7 +122,7 @@ function OrderTable({
       label={label}
       headers={[
         "订单",
-        "应用 / 支付宝用户名",
+        "应用 / 支付渠道",
         "原金额",
         "实收",
         "状态",
@@ -140,7 +140,7 @@ function OrderTable({
         </Button>,
         <div>
           {o.app_id || "默认应用"}
-          <p className="text-xs text-muted">{o.payer || "—"}</p>
+          <p className="text-xs text-muted">{o.payment_type === "wxpay" ? "微信支付" : "支付宝"}</p>
         </div>,
         money(o.amount_cents),
         <div>
@@ -252,7 +252,7 @@ export function Overview(p: PageProps) {
                 </div>
                 <div className="flex-1">
                   <h3>未匹配收款</h3>
-                  <p>核对金额与支付宝账单</p>
+                  <p>核对金额与支付账单</p>
                 </div>
                 <b>{d.unmatched}</b>
               </div>
@@ -407,7 +407,7 @@ export function Orders(p: PageProps) {
                 label="搜索订单"
                 value={query}
                 onChange={setQuery}
-                placeholder="订单号、商品、应用或用户名"
+                placeholder="订单号、商品或应用"
               />
               <Button
                 type="submit"
@@ -527,8 +527,7 @@ function OrderDetails({
           <div className="grid grid-cols-2 gap-5">
             <KV label="商户订单号" value={selected.out_trade_no} />
             <KV label="应用" value={selected.app_id || "默认应用"} />
-            <KV label="支付宝用户名" value={selected.payer || "—"} />
-            <KV label="业务用户名" value={selected.username || "—"} />
+            <KV label="支付渠道" value={selected.payment_type === "wxpay" ? "微信支付" : "支付宝"} />
             <KV label="商品" value={selected.name} />
             <KV label="原金额" value={money(selected.amount_cents)} />
             <KV label="实收" value={money(selected.pay_amount_cents)} />
@@ -913,7 +912,7 @@ export function Devices(p: PageProps) {
           )}
         </div>
         <p className="mt-5 text-xs leading-6 text-muted">
-          客户端每分钟上报心跳，页面每 15
+          客户端默认每 15 秒上报心跳（可配置），页面每 15
           秒更新。在线仅代表设备在通信，请同时检查通知监听与前台服务状态。
         </p>
       </Panel>
@@ -1010,6 +1009,7 @@ export function SettingsPage(p: PageProps) {
                 await api(scoped("settings", p.merchant), "PUT", {
                   name: form.name,
                   qr_image: form.qr_image || "",
+                  wechat_qr_image: form.wechat_qr_image || "",
                   pool_limit: form.pool_limit,
                   order_ttl_minutes: form.order_ttl_minutes,
                   payment_note: form.payment_note,
@@ -1020,7 +1020,7 @@ export function SettingsPage(p: PageProps) {
             <div className="grid gap-6 xl:grid-cols-2">
               <Panel
                 title="收款配置"
-                description="使用允许付款人输入金额的支付宝收款码"
+                description="分别配置允许付款人输入金额的支付宝和微信收款码"
               >
                 <Field
                   label="商户名称"
@@ -1028,42 +1028,29 @@ export function SettingsPage(p: PageProps) {
                   onChange={(v) => set({ name: v })}
                   required
                 />
-                <div className="qr-upload">
-                  {form.qr_image ? (
-                    <img src={form.qr_image} alt="支付宝收款码" />
-                  ) : (
-                    <div className="qr-placeholder">
-                      <Upload size={28} />
-                      <span>上传你的收款码</span>
+                {([['qr_image', '支付宝'], ['wechat_qr_image', '微信支付']] as const).map(([field, channel]) => (
+                  <div key={field} className="mt-5">
+                    <div className="mb-2 flex items-center justify-between">
+                      <Label>{channel}收款码</Label>
+                      {form[field] && <Button size="sm" variant="ghost" onPress={() => set({ [field]: "" })}>移除</Button>}
                     </div>
-                  )}
-                  <div>
-                    <label className="file-button">
-                      <Upload size={15} />
-                      选择图片
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (!f) return;
-                          if (f.size > 2 * 1024 * 1024) {
-                            p.notify("图片不能超过 2 MiB");
-                            return;
-                          }
-                          const reader = new FileReader();
-                          reader.onload = () =>
-                            set({ qr_image: String(reader.result) });
-                          reader.onerror = () => p.notify("读取图片失败");
-                          reader.readAsDataURL(f);
-                        }}
-                      />
-                    </label>
-                    <p className="mt-2 text-[11px] text-muted">
-                      PNG / JPEG，最大 2 MiB
-                    </p>
+                    <div className="qr-upload">
+                      {form[field] ? <img src={form[field]} alt={channel + "收款码"} /> :
+                        <div className="qr-placeholder"><Upload size={28} /><span>上传{channel}收款码</span></div>}
+                      <div>
+                        <label className="file-button"><Upload size={15} />选择图片
+                          <input type="file" aria-label={channel + "收款码"} accept="image/png,image/jpeg" onChange={(e) => {
+                            const f = e.target.files?.[0]; if (!f) return;
+                            if (f.size > 2 * 1024 * 1024) { p.notify("图片不能超过 2 MiB"); return; }
+                            const reader = new FileReader(); reader.onload = () => set({ [field]: String(reader.result) });
+                            reader.onerror = () => p.notify("读取图片失败"); reader.readAsDataURL(f);
+                          }} />
+                        </label>
+                        <p className="mt-2 text-[11px] text-muted">PNG / JPEG，最大 2 MiB</p>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ))}
                 <p className="text-xs leading-6 text-muted">
                   新收款码用于后续订单。已创建订单保留当时的收款码，避免付款过程中切换收款账户。
                 </p>

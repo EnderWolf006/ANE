@@ -15,6 +15,7 @@ import (
 
 // Recreate the actual pre-upgrade shape, including the implicit merchant credential.
 func downgradeV5Fixture(t *testing.T, a *App) {
+	downgradeV6Fixture(t, a)
 	t.Helper()
 	_, err := a.db.Exec(context.Background(), `ALTER TABLE mail_queue DROP COLUMN subscription_id;
  DROP TABLE notification_subscriptions;
@@ -70,7 +71,7 @@ func TestV5MigrationPreservesCredentialsOrdersAndSubscriptions(t *testing.T) {
 		t.Fatal("existing named default lost", app, err)
 	}
 	var ok bool
-	if err = upgraded.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM mail_queue q JOIN notification_subscriptions s ON s.id=q.subscription_id JOIN notification_events e ON e.id=q.event_id WHERE s.email='old@example.test' AND 'default'=ANY(s.apps) AND s.topics=ARRAY['payment_received'] AND e.app_id='default' AND q.subject='old subject')`).Scan(&ok); err != nil || !ok {
+	if err = upgraded.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM mail_queue q JOIN notification_subscriptions s ON s.id=q.subscription_id JOIN notification_events e ON e.id=q.event_id WHERE s.email='old@example.test' AND 'default'=ANY(s.apps) AND s.topics=ARRAY['payment_received'] AND e.app_id='default' AND q.subject LIKE '支付宝成功收款%')`).Scan(&ok); err != nil || !ok {
 		t.Fatal("mail migration", err)
 	}
 	v := values("old", "10.00")
@@ -128,7 +129,7 @@ func TestIndependentEmailApplicationPreferences(t *testing.T) {
 	if err := a.db.QueryRow(ctx, `SELECT count(*),min(subject),min(body) FROM mail_queue`).Scan(&count, &subject, &body); err != nil || count != 2 {
 		t.Fatal("app routing", count, err)
 	}
-	if subject != "张** 成功支付 ¥10.00 · default" || strings.Contains(subject, "优惠") || !strings.Contains(body, "平台订单号: "+o.TradeNo) || !strings.Contains(body, "支付宝用户名: 张**") {
+	if subject != "支付宝成功收款 ¥10.00 · default" || strings.Contains(subject, "优惠") || !strings.Contains(body, "平台订单号: "+o.TradeNo) || strings.Contains(body, "张**") {
 		t.Fatal(subject, body)
 	}
 	if w := request(t, a, "DELETE", "/api/manage/subscriptions", map[string]any{"id": ids[0]}, h); w.Code != 200 {
@@ -158,7 +159,7 @@ func TestCSVExportsAllFilteredRowsAndDateTimes(t *testing.T) {
 	h := session(t, a, m.Username, "merchant-password-123")
 	for i := 0; i < 35; i++ {
 		o := create(t, a, m, fmt.Sprint(i), "10.00")
-		_, err := a.db.Exec(ctx, `UPDATE orders SET created_at='2026-11-16T09:30:45Z',username='=formula' WHERE trade_no=$1`, o.TradeNo)
+		_, err := a.db.Exec(ctx, `UPDATE orders SET created_at='2026-11-16T09:30:45Z',name='=formula' WHERE trade_no=$1`, o.TradeNo)
 		if err != nil {
 			t.Fatal(err)
 		}

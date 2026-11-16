@@ -180,7 +180,7 @@ func (a *App) adminOrders(w http.ResponseWriter, r *http.Request, id int64) {
 		ordering = "amount ASC,created_at DESC,trade_no DESC"
 	}
 	query := "SELECT " + orderColumns + ` FROM orders WHERE ($1::bigint=0 OR merchant_id=$1)
- AND ($2='' OR out_trade_no ILIKE '%'||$2||'%' OR trade_no ILIKE '%'||$2||'%' OR username ILIKE '%'||$2||'%' OR EXISTS(SELECT 1 FROM events e WHERE e.id=orders.event_id AND e.payer ILIKE '%'||$2||'%') OR app_id ILIKE '%'||$2||'%' OR name ILIKE '%'||$2||'%')
+ AND ($2='' OR out_trade_no ILIKE '%'||$2||'%' OR trade_no ILIKE '%'||$2||'%' OR app_id ILIKE '%'||$2||'%' OR name ILIKE '%'||$2||'%')
  AND ($4='' OR CASE WHEN status='pending' AND expires_at<=now() THEN 'expired' ELSE status END=$4)
  AND ($5='' OR callback_status=$5) AND (NOT $6::boolean OR app_id=$7)
  AND ($8='' OR ($8='none' AND discount=0) OR ($8='discounted' AND discount>0))
@@ -219,13 +219,13 @@ func (a *App) adminOrders(w http.ResponseWriter, r *http.Request, id int64) {
 		var b bytes.Buffer
 		b.WriteString("\xef\xbb\xbf")
 		writer := csv.NewWriter(&b)
-		_ = writer.Write([]string{"平台订单号", "商户订单号", "应用", "支付宝用户名", "业务用户名", "商品", "原金额", "实收", "优惠", "状态", "回调", "创建时间", "付款时间"})
+		_ = writer.Write([]string{"平台订单号", "商户订单号", "应用", "支付渠道", "商品", "原金额", "实收", "优惠", "状态", "回调", "创建时间", "付款时间"})
 		for _, o := range list {
 			paid := ""
 			if o.PaidAt != nil {
 				paid = o.PaidAt.Format(time.RFC3339)
 			}
-			record := []string{o.TradeNo, o.OutTradeNo, o.AppID, o.Payer, o.Username, o.Name, core.Money(o.Amount), core.Money(o.PayAmount), core.Money(int64(o.Discount)), o.Status, o.CallbackStatus, o.CreatedAt.Format(time.RFC3339), paid}
+			record := []string{o.TradeNo, o.OutTradeNo, o.AppID, core.PaymentLabel(o.PaymentType), o.Name, core.Money(o.Amount), core.Money(o.PayAmount), core.Money(int64(o.Discount)), o.Status, o.CallbackStatus, o.CreatedAt.Format(time.RFC3339), paid}
 			for i, value := range record {
 				trimmed := strings.TrimSpace(value)
 				if len(trimmed) > 0 && strings.ContainsRune("=+-@", rune(trimmed[0])) {
@@ -305,7 +305,7 @@ func (a *App) pools(w http.ResponseWriter, r *http.Request, id int64) {
 func (a *App) manageMerchants(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		a.jsonList(w, r, `SELECT jsonb_build_object('id',m.id,'username',m.username,'name',m.name,'is_admin',m.is_admin,'enabled',m.enabled,'pool_limit',m.pool_limit,'order_ttl_minutes',m.order_ttl_minutes,'app_count',(SELECT count(*) FROM merchant_apps WHERE merchant_id=m.id AND deleted_at IS NULL),'created_at',m.created_at,'has_qr',m.qr_image<>'','device_online',coalesce(NOT d.revoked AND d.last_seen>now()-interval '3 minutes',false)) FROM merchants m LEFT JOIN devices d ON d.merchant_id=m.id ORDER BY m.id`)
+		a.jsonList(w, r, `SELECT jsonb_build_object('id',m.id,'username',m.username,'name',m.name,'is_admin',m.is_admin,'enabled',m.enabled,'pool_limit',m.pool_limit,'order_ttl_minutes',m.order_ttl_minutes,'app_count',(SELECT count(*) FROM merchant_apps WHERE merchant_id=m.id AND deleted_at IS NULL),'created_at',m.created_at,'has_qr',(m.qr_image<>'' OR m.wechat_qr_image<>''),'device_online',coalesce(NOT d.revoked AND d.last_seen>now()-interval '3 minutes',false)) FROM merchants m LEFT JOIN devices d ON d.merchant_id=m.id ORDER BY m.id`)
 	case "POST":
 		var in struct {
 			Username  string `json:"username"`
@@ -415,11 +415,12 @@ func (a *App) merchantSettings(w http.ResponseWriter, r *http.Request, id int64)
 		respond(w, 200, map[string]any{"code": 1, "data": m, "base_url": a.cfg.BaseURL})
 	case "PUT":
 		var in struct {
-			Name        string `json:"name"`
-			QR          string `json:"qr_image"`
-			PaymentNote string `json:"payment_note"`
-			PoolLimit   int    `json:"pool_limit"`
-			TTL         int    `json:"order_ttl_minutes"`
+			Name        string  `json:"name"`
+			QR          string  `json:"qr_image"`
+			WechatQR    *string `json:"wechat_qr_image"`
+			PaymentNote string  `json:"payment_note"`
+			PoolLimit   int     `json:"pool_limit"`
+			TTL         int     `json:"order_ttl_minutes"`
 		}
 		if !decode(w, r, &in) {
 			return
@@ -439,6 +440,12 @@ func (a *App) merchantSettings(w http.ResponseWriter, r *http.Request, id int64)
 				return
 			}
 		}
+		if in.WechatQR != nil && *in.WechatQR != "" {
+			if _, _, err := parseImage(*in.WechatQR); err != nil {
+				fail(w, 400, err.Error())
+				return
+			}
+		}
 		tx, err := a.db.Begin(r.Context())
 		if err != nil {
 			a.internal(w, err)
@@ -449,7 +456,7 @@ func (a *App) merchantSettings(w http.ResponseWriter, r *http.Request, id int64)
 			a.internal(w, err)
 			return
 		}
-		_, err = tx.Exec(r.Context(), "UPDATE merchants SET name=$1,qr_image=$2,pool_limit=$3,order_ttl_minutes=$4,payment_note=$6,updated_at=now() WHERE id=$5", strings.TrimSpace(in.Name), in.QR, in.PoolLimit, in.TTL, id, in.PaymentNote)
+		_, err = tx.Exec(r.Context(), "UPDATE merchants SET name=$1,qr_image=$2,pool_limit=$3,order_ttl_minutes=$4,payment_note=$6,wechat_qr_image=coalesce($7,wechat_qr_image),updated_at=now() WHERE id=$5", strings.TrimSpace(in.Name), in.QR, in.PoolLimit, in.TTL, id, in.PaymentNote, in.WechatQR)
 		if err != nil {
 			a.internal(w, err)
 			return

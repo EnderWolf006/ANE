@@ -24,14 +24,15 @@ type Merchant struct {
 	Key         string `json:"merchant_key,omitempty"`
 	PoolLimit   int    `json:"pool_limit"`
 	TTL         int    `json:"order_ttl_minutes"`
+	WechatQR    string `json:"wechat_qr_image,omitempty"`
 	QR          string `json:"qr_image,omitempty"`
 }
 
-const merchantColumns = "id,username,name,is_admin,enabled,merchant_key,pool_limit,order_ttl_minutes,qr_image,payment_note"
+const merchantColumns = "id,username,name,is_admin,enabled,merchant_key,pool_limit,order_ttl_minutes,qr_image,payment_note,wechat_qr_image"
 
 func scanMerchant(row pgx.Row) (Merchant, error) {
 	var m Merchant
-	err := row.Scan(&m.ID, &m.Username, &m.Name, &m.IsAdmin, &m.Enabled, &m.Key, &m.PoolLimit, &m.TTL, &m.QR, &m.PaymentNote)
+	err := row.Scan(&m.ID, &m.Username, &m.Name, &m.IsAdmin, &m.Enabled, &m.Key, &m.PoolLimit, &m.TTL, &m.QR, &m.PaymentNote, &m.WechatQR)
 	return m, err
 }
 func (a *App) merchant(ctx context.Context, id int64) (Merchant, error) {
@@ -123,7 +124,7 @@ func (a *App) auth(next http.Handler) http.Handler {
 			return
 		}
 		// Authentication needs no QR image; avoid fetching the potentially multi-megabyte data URL on every request.
-		m, err := scanMerchant(a.db.QueryRow(r.Context(), "SELECT id,username,name,is_admin,enabled,merchant_key,pool_limit,order_ttl_minutes,'' AS qr_image,payment_note FROM merchants WHERE id=(SELECT merchant_id FROM sessions WHERE token_hash=$1 AND expires_at>now())", digest(c.Value)))
+		m, err := scanMerchant(a.db.QueryRow(r.Context(), "SELECT id,username,name,is_admin,enabled,merchant_key,pool_limit,order_ttl_minutes,'' AS qr_image,payment_note,'' AS wechat_qr_image FROM merchants WHERE id=(SELECT merchant_id FROM sessions WHERE token_hash=$1 AND expires_at>now())", digest(c.Value)))
 		if errors.Is(err, pgx.ErrNoRows) {
 			fail(w, 401, "会话已过期")
 			return

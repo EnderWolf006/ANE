@@ -12,8 +12,8 @@ android {
         applicationId = "com.ane.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "2.3.1"
+        versionCode = 5
+        versionName = "2.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true; buildConfig = true }

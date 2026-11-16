@@ -69,13 +69,17 @@ class AlipayListener : NotificationListenerService() {
     }
     override fun onListenerDisconnected() { Monitor.listenerConnected = false; requestRebind(ComponentName(this, AlipayListener::class.java)) }
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
-        if (sbn == null || sbn.packageName != "com.eg.android.AlipayGphone" || !SharedStore.state.value.config.enabled) return
+        if (sbn == null || !NoticeParser.supported(sbn.packageName) || !SharedStore.state.value.config.enabled) return
+        // Group summaries can repeat receipts already delivered as individual notifications.
+        if (sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
         val extras = sbn.notification.extras
+        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+        if (sbn.packageName == NoticeParser.WECHAT && !title.contains("微信收款助手") && !title.contains("微信支付")) return
         val candidates = listOfNotNull(extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(), extras.getCharSequence(Notification.EXTRA_TEXT)?.toString(), extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()) + (extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.map { it.toString() } ?: emptyList())
-        val text = candidates.map { it.trim() }.firstOrNull { NoticeParser.parse(it) != null } ?: return
+        val text = candidates.map { it.trim() }.firstOrNull { NoticeParser.parse(sbn.packageName, it) != null } ?: return
         scope.launch {
             intake.withLock {
-                runCatching { SharedStore.record(sbn.key, text, sbn.postTime) }
+                runCatching { SharedStore.record(sbn.packageName, sbn.key, text, sbn.postTime) }
                     .onSuccess { Reporter.drain() }
             }
         }
@@ -90,7 +94,7 @@ class KeepAliveService : Service() {
         manager.createNotificationChannel(NotificationChannel("ane-monitor", "ANE 后台监听", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val notification = NotificationCompat.Builder(this, "ane-monitor").setSmallIcon(R.drawable.ic_ane)
-            .setContentTitle("ANE 正在监听支付宝收款通知").setContentText("点击查看连接、待上报通知和运行状态")
+            .setContentTitle("ANE 正在监听支付宝与微信收款").setContentText("点击查看连接、待上报通知和运行状态")
             .setContentIntent(open).setOngoing(true).setCategory(NotificationCompat.CATEGORY_SERVICE).build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(1, notification)
         Monitor.serviceRunning = true

@@ -65,6 +65,7 @@ export interface Merchant {
   order_ttl_minutes: number;
   merchant_key?: string;
   qr_image?: string;
+  wechat_qr_image?: string;
   has_qr?: boolean;
   device_online?: boolean;
   created_at?: string;
@@ -73,8 +74,7 @@ export interface Order {
   trade_no: string;
   merchant_id: number;
   app_id: string;
-  username: string;
-  payer: string;
+  payment_type: "alipay" | "wxpay";
   out_trade_no: string;
   name: string;
   amount_cents: number;
@@ -114,6 +114,7 @@ export interface Device {
   heartbeat_age_seconds: number | null;
 }
 export interface EventRecord {
+  payment_type: "alipay" | "wxpay";
   id: string;
   merchant_id: number;
   merchant_name: string;

@@ -57,7 +57,7 @@ func TestAppsSharePoolAndScopeOrders(t *testing.T) {
 	}
 	v.Set("username", "bob")
 	v.Set("sign", core.Sign(v, "secret_shop_b"))
-	if w := request(t, a, "GET", "/mapi.php?"+v.Encode(), nil, nil); w.Code != 409 {
+	if w := request(t, a, "GET", "/mapi.php?"+v.Encode(), nil, nil); w.Code != 200 {
 		t.Fatal(w.Body.String())
 	}
 	callback := callbackValues(first)

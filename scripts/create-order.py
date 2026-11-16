@@ -12,6 +12,7 @@ import urllib.request
 p = argparse.ArgumentParser(description='创建 ANE 易支付测试订单，返回收银台 URL')
 p.add_argument('--base', required=True)
 p.add_argument('--pid', default='1000')
+p.add_argument('--type', choices=['alipay','wxpay'], default='alipay')
 p.add_argument('--out-trade-no', required=True)
 p.add_argument('--money', required=True)
 p.add_argument('--notify', required=True)
@@ -21,7 +22,7 @@ a = p.parse_args()
 key = os.environ.get('ANE_MERCHANT_KEY')
 if not key:
     sys.exit('请通过 ANE_MERCHANT_KEY 环境变量设置商户密钥')
-values = dict(pid=a.pid, type='alipay', out_trade_no=a.out_trade_no, money=a.money,
+values = dict(pid=a.pid, type=a.type, out_trade_no=a.out_trade_no, money=a.money,
               notify_url=a.notify, return_url=a.return_url, name=a.name)
 canonical = '&'.join(f'{k}={values[k]}' for k in sorted(values) if values[k])
 values['sign'] = hashlib.md5((canonical + key).encode()).hexdigest()

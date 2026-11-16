@@ -36,17 +36,11 @@ func queueNotification(ctx context.Context, tx pgx.Tx, merchant int64, topic, ke
 			return err
 		}
 		app = o.AppID
-		var payer, raw string
-		if err = tx.QueryRow(ctx, "SELECT coalesce((SELECT payer FROM events WHERE trade_no=$1 LIMIT 1),''),coalesce((SELECT raw_text FROM events WHERE trade_no=$1 LIMIT 1),'')", trade).Scan(&payer, &raw); err != nil {
+		var raw string
+		if err = tx.QueryRow(ctx, "SELECT coalesce((SELECT raw_text FROM events WHERE trade_no=$1 LIMIT 1),'')", trade).Scan(&raw); err != nil {
 			return err
 		}
-		if payer == "" {
-			payer = o.Username
-		}
-		if payer == "" {
-			payer = "付款人"
-		}
-		subject = fmt.Sprintf("%s 成功支付 ¥%s", payer, core.Money(o.PayAmount))
+		subject = fmt.Sprintf("%s成功收款 ¥%s", core.PaymentLabel(o.PaymentType), core.Money(o.PayAmount))
 		if topic == "callback_failed" {
 			subject = fmt.Sprintf("应用 %s：订单 %s 回调失败", o.AppID, o.OutTradeNo)
 		}
@@ -56,7 +50,7 @@ func queueNotification(ctx context.Context, tx pgx.Tx, merchant int64, topic, ke
 		if topic == "payment_received" {
 			subject += " · " + o.AppID
 		}
-		details += fmt.Sprintf("应用: %s\n支付宝用户名: %s\n业务用户名: %s\n平台订单号: %s\n商户订单号: %s\n商品: %s\n原金额: %s 元\n实收: %s 元\n优惠: %s 元\n订单状态: %s\n创建时间: %s\n到期时间: %s\n回调地址: %s\n回调状态: %s\n回调尝试: %d\n回调结果: %s\n附加参数: %s\n原始收款通知: %s\n", o.AppID, payer, o.Username, o.TradeNo, o.OutTradeNo, o.Name, core.Money(o.Amount), core.Money(o.PayAmount), core.Money(int64(o.Discount)), o.Status, o.CreatedAt.Format(time.RFC3339), o.ExpiresAt.Format(time.RFC3339), o.NotifyURL, o.CallbackStatus, o.CallbackAttempts, o.CallbackResult, o.Param, raw)
+		details += fmt.Sprintf("应用: %s\n支付渠道: %s\n平台订单号: %s\n商户订单号: %s\n商品: %s\n原金额: %s 元\n实收: %s 元\n优惠: %s 元\n订单状态: %s\n创建时间: %s\n到期时间: %s\n回调地址: %s\n回调状态: %s\n回调尝试: %d\n回调结果: %s\n附加参数: %s\n收款摘要: %s\n", o.AppID, core.PaymentLabel(o.PaymentType), o.TradeNo, o.OutTradeNo, o.Name, core.Money(o.Amount), core.Money(o.PayAmount), core.Money(int64(o.Discount)), o.Status, o.CreatedAt.Format(time.RFC3339), o.ExpiresAt.Format(time.RFC3339), o.NotifyURL, o.CallbackStatus, o.CallbackAttempts, o.CallbackResult, o.Param, raw)
 		if o.PaidAt != nil {
 			details += "支付时间: " + o.PaidAt.Format(time.RFC3339) + "\n"
 		}
@@ -96,15 +90,15 @@ func queueNotification(ctx context.Context, tx pgx.Tx, merchant int64, topic, ke
 			details += "最近心跳: " + last.Format(time.RFC3339) + "\n"
 		}
 		if strings.HasPrefix(key, "unmatched:") {
-			var payer, raw, reason, notificationID string
+			var paymentType, raw, reason, notificationID string
 			var amount int64
 			var posted, received time.Time
-			err = tx.QueryRow(ctx, "SELECT payer,amount,raw_text,reason,notification_id,posted_at,received_at FROM events WHERE id=$1 AND merchant_id=$2", strings.TrimPrefix(key, "unmatched:"), merchant).Scan(&payer, &amount, &raw, &reason, &notificationID, &posted, &received)
+			err = tx.QueryRow(ctx, "SELECT payment_type,amount,raw_text,reason,notification_id,posted_at,received_at FROM events WHERE id=$1 AND merchant_id=$2", strings.TrimPrefix(key, "unmatched:"), merchant).Scan(&paymentType, &amount, &raw, &reason, &notificationID, &posted, &received)
 			if err != nil {
 				return err
 			}
-			subject = fmt.Sprintf("%s 收到 %s 的 ¥%s，未匹配订单", device, payer, core.Money(amount))
-			details += fmt.Sprintf("支付宝用户名: %s\n收款金额: %s 元\n匹配结果: %s\n通知 ID: %s\n通知时间: %s\n上报时间: %s\n原始通知: %s\n", payer, core.Money(amount), reason, notificationID, posted.Format(time.RFC3339), received.Format(time.RFC3339), raw)
+			subject = fmt.Sprintf("%s %s收款 ¥%s，未匹配订单", device, core.PaymentLabel(paymentType), core.Money(amount))
+			details += fmt.Sprintf("支付渠道: %s\n收款金额: %s 元\n匹配结果: %s\n通知 ID: %s\n通知时间: %s\n上报时间: %s\n收款摘要: %s\n", core.PaymentLabel(paymentType), core.Money(amount), reason, notificationID, posted.Format(time.RFC3339), received.Format(time.RFC3339), raw)
 		}
 	}
 	subject = clipText(strings.Join(strings.Fields(subject), " "), 180)

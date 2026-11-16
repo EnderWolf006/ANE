@@ -4,6 +4,7 @@ import { CheckCircle2, Clock3, ShieldCheck } from "lucide-react";
 import { api, money } from "./api";
 import { Loading, Notice } from "./components";
 interface Payment {
+  payment_type: "alipay" | "wxpay";
   payment_note: string;
   trade_no: string;
   out_trade_no: string;
@@ -46,6 +47,7 @@ export function Pay() {
       clearInterval(clock);
     };
   }, [trade]);
+  const channel = data?.payment_type === "wxpay" ? "微信" : "支付宝";
   const seconds = data
     ? Math.max(
         0,
@@ -70,13 +72,13 @@ export function Pay() {
                   variant="soft"
                   color={data.status === "paid" ? "success" : "accent"}
                 >
-                  {data.status === "paid" ? "付款已确认" : "支付宝付款"}
+                  {data.status === "paid" ? "付款已确认" : channel + "付款"}
                 </Chip>
                 <h1 className="mt-2 text-lg font-semibold">{data.name}</h1>
                 <p className="mt-1 text-xs text-muted">
                   {data.status === "paid"
                     ? "感谢你的付款，收款信息已确认。"
-                    : "打开支付宝扫一扫，输入下方精确金额。"}
+                    : "打开" + channel + "扫一扫，输入下方精确金额。"}
                 </p>
                 <div className="payment-amount">
                   {money(data.pay_amount_cents)}
@@ -103,7 +105,7 @@ export function Pay() {
                   <img
                     className="payment-qr"
                     src={"/api/pay/" + encodeURIComponent(trade) + "/qr"}
-                    alt="支付宝收款码"
+                    alt={channel + "收款码"}
                   />
                   <div className="payment-countdown">
                     <Clock3 size={14} />

@@ -69,7 +69,7 @@ func TestOrderFilters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = a.db.Exec(ctx, "UPDATE orders SET status='paid',callback_status='failed',username='alice' WHERE trade_no=$1", discounted.TradeNo)
+	_, err = a.db.Exec(ctx, "UPDATE orders SET status='paid',callback_status='failed' WHERE trade_no=$1", discounted.TradeNo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestOrderFilters(t *testing.T) {
 	}
 	check("status=pending", zero.TradeNo, app.TradeNo)
 	check("status=expired", expired.TradeNo)
-	check("status=paid&callback_status=failed&discount=discounted&q=alice", discounted.TradeNo)
+	check("status=paid&callback_status=failed&discount=discounted&q=discounted", discounted.TradeNo)
 	check("app_id=filter_app", app.TradeNo)
 	check("app_id=default&status=pending", zero.TradeNo)
 	check("discount=none&sort=amount_asc", zero.TradeNo, expired.TradeNo, app.TradeNo)

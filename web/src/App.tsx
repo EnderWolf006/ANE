@@ -207,7 +207,7 @@ export function App() {
       <aside className={"sidebar " + (mobile ? "is-open" : "")}>
         <a href="/admin" className="brand">
           <img src="/assets/ane.svg" alt="" />
-          ANE<span className="version-tag">2.3</span>
+          ANE<span className="version-tag">2.4</span>
         </a>
         <div className="workspace-switch">
           <div className="workspace-avatar">{selected.name.slice(0, 1)}</div>
@@ -447,7 +447,7 @@ function Login({ onLogin }: { onLogin: () => Promise<void> }) {
             商户账号由管理员创建。如需重置密码，请联系管理员。
           </p>
         </div>
-        <p className="text-xs text-muted">ANE · 2.3</p>
+        <p className="text-xs text-muted">ANE · 2.4</p>
       </div>
       <div className="login-visual">
         <div className="orbit orbit-one" />
