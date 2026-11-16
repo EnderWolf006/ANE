@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-//go:embed schema.sql migrate_v3.sql migrate_v4.sql migrate_v5.sql migrate_v6.sql web
+//go:embed schema.sql migrate_v3.sql migrate_v4.sql migrate_v5.sql migrate_v6.sql migrate_v7.sql web
 var files embed.FS
 
 type App struct {
@@ -70,7 +70,7 @@ func New(ctx context.Context, c Config) (*App, error) {
 		if err = tx.QueryRow(ctx, "SELECT max(version) FROM schema_version").Scan(&version); err != nil {
 			return failNew(err)
 		}
-		if version != 2 && version != 3 && version != 4 && version != 5 && version != 6 {
+		if version != 2 && version != 3 && version != 4 && version != 5 && version != 6 && version != 7 {
 			return failNew(errors.New("ANE v2 requires a new empty database; existing schema is not modified"))
 		}
 		if version == 2 {
@@ -103,6 +103,15 @@ func New(ctx context.Context, c Config) (*App, error) {
 				return failNew(err)
 			}
 			migration, _ := files.ReadFile("migrate_v6.sql")
+			if _, err = tx.Exec(ctx, string(migration)); err != nil {
+				return failNew(err)
+			}
+		}
+		if version <= 6 {
+			if _, err = tx.Exec(ctx, "SET LOCAL lock_timeout='5s'"); err != nil {
+				return failNew(err)
+			}
+			migration, _ := files.ReadFile("migrate_v7.sql")
 			if _, err = tx.Exec(ctx, string(migration)); err != nil {
 				return failNew(err)
 			}
@@ -193,7 +202,7 @@ func (a *App) Handler() http.Handler {
 			fail(w, 503, "database unavailable")
 			return
 		}
-		respond(w, 200, map[string]string{"status": "ok", "version": "2.4.1"})
+		respond(w, 200, map[string]string{"status": "ok", "version": "2.4.2"})
 	})
 	mux.HandleFunc("POST /api/auth/login", a.login)
 	mux.Handle("/api/manage/", a.auth(http.HandlerFunc(a.manageAPI)))

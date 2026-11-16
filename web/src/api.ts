@@ -127,6 +127,7 @@ export interface EventRecord {
   trade_no: string | null;
 }
 export interface Pool {
+  payment_type: "alipay" | "wxpay";
   merchant_id: number;
   merchant_name: string;
   amount_cents: number;

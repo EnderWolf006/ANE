@@ -600,6 +600,7 @@ export function Events(p: PageProps) {
           headers={["通知内容", "收款金额", "匹配结果", "通知 / 上报时间"]}
           rows={(r.data?.data || []).slice(0, 30).map((e) => [
             <div className="max-w-sm">
+              <p className="mb-1 text-xs text-muted"><PaymentChannel type={e.payment_type} /></p>
               <p>{e.raw_text}</p>
               <p className="mt-1 text-xs text-muted">{e.reason}</p>
               {e.trade_no && (
@@ -638,7 +639,7 @@ export function Pools(p: PageProps) {
   return (
     <div className="space-y-6">
       <Notice>
-        每个充值金额从
+        微信与支付宝各自按充值金额独立分配，同一渠道的所有应用共享优惠池。从
         −¥0.00（不优惠）开始。优先复用最小空位，按需扩容；付款或超时后释放，尾部空位自动收缩。
       </Notice>
       <Guard loading={r.loading && !r.data} error={r.error}>
@@ -649,8 +650,8 @@ export function Pools(p: PageProps) {
               const visible = Math.min(pool.capacity, 80);
               return (
                 <Panel
-                  key={pool.amount_cents}
-                  title={money(pool.amount_cents) + " 充值池"}
+                  key={pool.merchant_id + ":" + pool.payment_type + ":" + pool.amount_cents}
+                  title={<span className="flex flex-wrap items-center gap-2"><PaymentChannel type={pool.payment_type} /><span>{money(pool.amount_cents)} 充值池</span></span>}
                   description={
                     "已启用 " +
                     pool.capacity +

@@ -13,6 +13,7 @@ import (
 // Reconstruct schema 5 so upgrade tests exercise the real destructive cleanup.
 func downgradeV6Fixture(t *testing.T, a *App) {
 	t.Helper()
+	downgradeV7Fixture(t, a)
 	_, err := a.db.Exec(context.Background(), `ALTER TABLE merchants DROP COLUMN wechat_qr_image;
  ALTER TABLE orders DROP COLUMN payment_type;
  ALTER TABLE events DROP COLUMN payment_type;
@@ -55,7 +56,7 @@ func TestWechatChannelsKeepQRCallbackAndNotificationIsolated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if wx.PaymentType != "wxpay" || wx.PayAmount != 999 {
+	if wx.PaymentType != "wxpay" || wx.PayAmount != 1000 {
 		t.Fatal(wx)
 	}
 	var savedQR string
@@ -69,7 +70,7 @@ func TestWechatChannelsKeepQRCallbackAndNotificationIsolated(t *testing.T) {
 	}
 	dev := device(t, a, m)
 	now := time.Now().UnixMilli()
-	wrong := EventInput{NotificationID: "wx-wrong", Package: core.WechatPackage, Text: "微信支付收款10元(朋友到店)", PostedAt: now}
+	wrong := EventInput{NotificationID: "wx-wrong", Package: core.WechatPackage, Text: "微信支付收款9.99元(朋友到店)", PostedAt: now}
 	w = request(t, a, "POST", "/api/device/events", wrong, dev)
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"status":"unmatched"`) {
 		t.Fatal(w.Body.String())
@@ -79,12 +80,12 @@ func TestWechatChannelsKeepQRCallbackAndNotificationIsolated(t *testing.T) {
 	if status != "pending" {
 		t.Fatal("WeChat receipt paid Alipay order")
 	}
-	paid := EventInput{NotificationID: "wx-paid", Package: core.WechatPackage, Text: "[4条]微信收款助手: 微信支付收款9.99元(老顾客第3次消费)", PostedAt: now}
+	paid := EventInput{NotificationID: "wx-paid", Package: core.WechatPackage, Text: "[4条]微信收款助手: 微信支付收款10元(老顾客第3次消费)", PostedAt: now}
 	w = request(t, a, "POST", "/api/device/events", paid, dev)
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"status":"matched"`) {
 		t.Fatal(w.Body.String())
 	}
-	paid.Text = core.ReceiptText("wxpay", 999)
+	paid.Text = core.ReceiptText("wxpay", 1000)
 	w = request(t, a, "POST", "/api/device/events", paid, dev)
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"duplicate":true`) {
 		t.Fatal("normalized retry duplicated", w.Body.String())
@@ -93,7 +94,7 @@ func TestWechatChannelsKeepQRCallbackAndNotificationIsolated(t *testing.T) {
 	if err = a.db.QueryRow(ctx, "SELECT subject,body FROM mail_queue WHERE subject LIKE '微信%' LIMIT 1").Scan(&subject, &body); err != nil {
 		t.Fatal(err)
 	}
-	if subject != "微信支付成功收款 ¥9.99（优惠 ¥0.01） · default" || strings.Contains(body, "用户名") || strings.Contains(body, "discarded_business_name") {
+	if subject != "微信支付成功收款 ¥10.00 · default" || strings.Contains(body, "用户名") || strings.Contains(body, "discarded_business_name") {
 		t.Fatal(subject, body)
 	}
 	w = request(t, a, "GET", "/api/manage/orders", nil, h)

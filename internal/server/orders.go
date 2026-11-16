@@ -61,7 +61,7 @@ func syncPools(ctx context.Context, tx pgx.Tx, id int64) error {
 	if _, err := tx.Exec(ctx, "UPDATE orders SET status='expired' WHERE merchant_id=$1 AND status='pending' AND expires_at<=clock_timestamp()", id); err != nil {
 		return err
 	}
-	_, err := tx.Exec(ctx, `UPDATE amount_pools p SET capacity=coalesce((SELECT max(discount)+1 FROM orders o WHERE o.merchant_id=p.merchant_id AND o.amount=p.amount AND o.status='pending'),0) WHERE p.merchant_id=$1`, id)
+	_, err := tx.Exec(ctx, `UPDATE amount_pools p SET capacity=coalesce((SELECT max(discount)+1 FROM orders o WHERE o.merchant_id=p.merchant_id AND o.payment_type=p.payment_type AND o.amount=p.amount AND o.status='pending'),0) WHERE p.merchant_id=$1`, id)
 	return err
 }
 func (a *App) createOrder(ctx context.Context, m Merchant, v url.Values) (Order, error) {
@@ -137,7 +137,7 @@ func (a *App) createOrder(ctx context.Context, m Merchant, v url.Values) (Order,
 		return zero, err
 	}
 	var discount int
-	err = tx.QueryRow(ctx, `SELECT slot FROM generate_series(0,$2::integer) slot WHERE NOT EXISTS(SELECT 1 FROM orders WHERE merchant_id=$1 AND status='pending' AND pay_amount=$3-slot) ORDER BY slot LIMIT 1`, m.ID, min(m.PoolLimit-1, int(amount-1)), amount).Scan(&discount)
+	err = tx.QueryRow(ctx, `SELECT slot FROM generate_series(0,$2::integer) slot WHERE NOT EXISTS(SELECT 1 FROM orders WHERE merchant_id=$1 AND payment_type=$4 AND status='pending' AND pay_amount=$3-slot) ORDER BY slot LIMIT 1`, m.ID, min(m.PoolLimit-1, int(amount-1)), amount, v.Get("type")).Scan(&discount)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return zero, errNoAmount
 	}
@@ -149,7 +149,7 @@ func (a *App) createOrder(ctx context.Context, m Merchant, v url.Values) (Order,
 	if err != nil {
 		return zero, err
 	}
-	_, err = tx.Exec(ctx, "INSERT INTO amount_pools(merchant_id,amount,capacity) VALUES($1,$2,$3) ON CONFLICT(merchant_id,amount) DO UPDATE SET capacity=greatest(amount_pools.capacity,excluded.capacity)", m.ID, amount, discount+1)
+	_, err = tx.Exec(ctx, "INSERT INTO amount_pools(merchant_id,payment_type,amount,capacity) VALUES($1,$2,$3,$4) ON CONFLICT(merchant_id,payment_type,amount) DO UPDATE SET capacity=greatest(amount_pools.capacity,excluded.capacity)", m.ID, v.Get("type"), amount, discount+1)
 	if err != nil {
 		return zero, err
 	}
