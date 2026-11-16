@@ -193,7 +193,7 @@ func (a *App) Handler() http.Handler {
 			fail(w, 503, "database unavailable")
 			return
 		}
-		respond(w, 200, map[string]string{"status": "ok", "version": "2.4.0"})
+		respond(w, 200, map[string]string{"status": "ok", "version": "2.4.1"})
 	})
 	mux.HandleFunc("POST /api/auth/login", a.login)
 	mux.Handle("/api/manage/", a.auth(http.HandlerFunc(a.manageAPI)))

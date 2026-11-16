@@ -153,6 +153,7 @@ private fun openSetting(context: Context, intent: Intent) {
                     item { AneCard("监听开关") { Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(if (snapshot.config.enabled) "已启用后台收款监听" else "开启自动上报", fontSize = 14.sp, fontWeight = FontWeight.Medium); Text("通知先存盘，再发送至服务端", color = Muted, fontSize = 11.sp) }; Switch(checked = snapshot.config.enabled, onCheckedChange = { vm.toggle(it) }, enabled = !busy && folder != null && storageError == null) }; if (!access) { Spacer(Modifier.height(8.dp)); TextButton(onClick = { openSetting(context, Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }) { Text("授予收款通知访问权限 →") } } } }
                     item { AneCard("连接状态") { InfoRow("服务端", snapshot.config.serverUrl.ifEmpty { "尚未配置" }); InfoRow("连接结果", snapshot.connection); InfoRow("最近心跳", timestamp(snapshot.lastHeartbeat)); Spacer(Modifier.height(10.dp)); OutlinedButton(onClick = { vm.testConnection() }, enabled = !busy && folder != null) { Text("测试服务端连接") } } }
                     item { Text("ANE 根据系统通知匹配订单。支付记录与资金到账请以支付宝或微信账单为准。", color = Muted, fontSize = 10.sp, lineHeight = 17.sp) }
+                    item { Text("ANE ${BuildConfig.VERSION_NAME} · Android ${Build.VERSION.RELEASE}", color = Muted, fontSize = 10.sp) }
                 }
                 1 -> ConfigScreen(snapshot, folder, busy, { pickFolder() }, vm) { scope.launch { snackbar.showSnackbar(it) } }
                 2 -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -197,7 +198,6 @@ private fun openSetting(context: Context, intent: Intent) {
                     if (sortedLogs.isEmpty()) item { Text("暂无日志", color = Muted, fontSize = 12.sp) }
                     items(sortedLogs.take(logLimit)) { log -> AneCard(timestamp(log.time)) { Text(log.message, fontSize = 12.sp) } }
                     item(key = "logs-more") { LoadMoreFooter(logLimit, sortedLogs.size) { logLimit += 30 } }
-                    item { Text("ANE ${BuildConfig.VERSION_NAME} · Android ${Build.VERSION.RELEASE}", color = Muted, fontSize = 10.sp) }
                 }
             }
         }

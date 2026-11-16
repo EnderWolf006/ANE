@@ -53,6 +53,7 @@ import {
   Toggle,
   useLoad,
 } from "./components";
+import { PaymentChannel } from "./PaymentChannel";
 import { TimeRange } from "./DateTime";
 import type { PageProps } from "./App";
 
@@ -140,7 +141,7 @@ function OrderTable({
         </Button>,
         <div>
           {o.app_id || "默认应用"}
-          <p className="text-xs text-muted">{o.payment_type === "wxpay" ? "微信支付" : "支付宝"}</p>
+          <p className="text-xs text-muted"><PaymentChannel type={o.payment_type} /></p>
         </div>,
         money(o.amount_cents),
         <div>
@@ -527,7 +528,7 @@ function OrderDetails({
           <div className="grid grid-cols-2 gap-5">
             <KV label="商户订单号" value={selected.out_trade_no} />
             <KV label="应用" value={selected.app_id || "默认应用"} />
-            <KV label="支付渠道" value={selected.payment_type === "wxpay" ? "微信支付" : "支付宝"} />
+            <KV label="支付渠道" value={<PaymentChannel type={selected.payment_type} />} />
             <KV label="商品" value={selected.name} />
             <KV label="原金额" value={money(selected.amount_cents)} />
             <KV label="实收" value={money(selected.pay_amount_cents)} />
@@ -645,17 +646,13 @@ export function Pools(p: PageProps) {
           <div className="grid gap-5 xl:grid-cols-2">
             {r.data.data.map((pool) => {
               const occupied = new Map(pool.slots.map((s) => [s.discount, s]));
-              const visible = Math.min(
-                Math.max(pool.capacity + 1, 8),
-                pool.pool_limit,
-                80,
-              );
+              const visible = Math.min(pool.capacity, 80);
               return (
                 <Panel
                   key={pool.amount_cents}
                   title={money(pool.amount_cents) + " 充值池"}
                   description={
-                    "容量 " +
+                    "已启用 " +
                     pool.capacity +
                     " / " +
                     pool.pool_limit +
@@ -680,11 +677,7 @@ export function Pools(p: PageProps) {
                           key={slot}
                           className={
                             "pool-slot " +
-                            (occupied.has(slot)
-                              ? "occupied"
-                              : slot < pool.capacity
-                                ? "available"
-                                : "future")
+                            (occupied.has(slot) ? "occupied" : "available")
                           }
                           title={
                             occupied.has(slot)
@@ -696,11 +689,7 @@ export function Pools(p: PageProps) {
                         >
                           <span>−{(slot / 100).toFixed(2)}</span>
                           <small>
-                            {occupied.has(slot)
-                              ? "占用"
-                              : slot < pool.capacity
-                                ? "空位"
-                                : "待扩容"}
+                            {occupied.has(slot) ? "占用" : "可复用"}
                           </small>
                         </div>
                       ),
@@ -712,6 +701,11 @@ export function Pools(p: PageProps) {
                       个优惠位，完整占用数见上方。
                     </p>
                   )}
+                  {pool.capacity < pool.pool_limit && (
+                    <p className="mt-3 text-xs leading-6 text-muted">
+                      还可按需启用 {pool.pool_limit - pool.capacity} 个优惠位，优先复用空位；有新订单时自动分配。
+                    </p>
+                  )}
                   <div className="mt-5 flex gap-5 text-[10px] text-muted">
                     <span>
                       <i className="legend-dot bg-accent" />
@@ -720,10 +714,6 @@ export function Pools(p: PageProps) {
                     <span>
                       <i className="legend-dot border border-accent" />
                       可复用
-                    </span>
-                    <span>
-                      <i className="legend-dot bg-default" />
-                      按需扩容
                     </span>
                   </div>
                 </Panel>
@@ -1031,7 +1021,7 @@ export function SettingsPage(p: PageProps) {
                 {([['qr_image', '支付宝'], ['wechat_qr_image', '微信支付']] as const).map(([field, channel]) => (
                   <div key={field} className="mt-5">
                     <div className="mb-2 flex items-center justify-between">
-                      <Label>{channel}收款码</Label>
+                      <Label><PaymentChannel type={field === "wechat_qr_image" ? "wxpay" : "alipay"} label={channel + "收款码"} /></Label>
                       {form[field] && <Button size="sm" variant="ghost" onPress={() => set({ [field]: "" })}>移除</Button>}
                     </div>
                     <div className="qr-upload">

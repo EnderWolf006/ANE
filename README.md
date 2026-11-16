@@ -1,6 +1,6 @@
 # ANE
 
-ANE 2.4 是 Go + PostgreSQL 收款服务端和 Jetpack Compose Android 通知监听客户端。Web 管理面板与收银台使用 React、Tailwind CSS v4、Vite 和 HeroUI v3。
+ANE 2.4.1 是 Go + PostgreSQL 收款服务端和 Jetpack Compose Android 通知监听客户端。Web 管理面板与收银台使用 React、Tailwind CSS v4、Vite 和 HeroUI v3。
 
 识别支付宝个人/商家收款及微信收款助手通知。支持经典易支付 MD5 协议；`/submit.php`、`/mapi.php`、`/api.php` 都是 **Go HTTP 路由**，不运行 PHP。
 
@@ -8,6 +8,7 @@ ANE 2.4 是 Go + PostgreSQL 收款服务端和 Jetpack Compose Android 通知监
 
 - 多商户独立登录、易支付密钥、收款码、优惠池、订单和设备。管理员可在 Web UI 创建、停用商户、重置密码并切换商户管理。
 - Env 只管理管理员登录凭据和服务运行参数。商户收款配置、SMTP 和通知订阅均存入 PostgreSQL，由 Web UI 管理。
+- Web 交易、收款码设置与收银台显示支付宝/微信图标；有优惠的付款页同时展示实付、原价及优惠金额。Android 当前版本在总览底部查看。
 - 每个原金额建立优惠池，从原价（优惠 ¥0.00）开始，优先分配最小空位，按需扩容。已付或超时后释放，尾部空位自动收缩。商户设置最大容量以限制让利。
 - 每商户一台监听设备，首次连接绑定设备标识；显示电量、充电、网络、心跳、通知监听、前台服务、离线队列及系统版本。
 - SMTP 邮件通知：收款成功、收款未匹配、回调最终失败、设备离线、恢复在线、低电量。每个商户可配置多个邮箱，各邮箱独立选择事件和应用。

@@ -417,10 +417,6 @@ a:focus-visible {
   color: var(--accent);
   background: oklch(0.96 0.02 150);
 }
-.pool-slot.future {
-  color: var(--muted);
-  background: var(--surface-secondary);
-}
 .legend-dot {
   display: inline-block;
   width: 7px;

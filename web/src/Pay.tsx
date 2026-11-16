@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Card, Chip } from "@heroui/react";
 import { CheckCircle2, Clock3, ShieldCheck } from "lucide-react";
+import { PaymentChannel } from "./PaymentChannel";
 import { api, money } from "./api";
 import { Loading, Notice } from "./components";
 interface Payment {
@@ -72,7 +73,7 @@ export function Pay() {
                   variant="soft"
                   color={data.status === "paid" ? "success" : "accent"}
                 >
-                  {data.status === "paid" ? "付款已确认" : channel + "付款"}
+                  <PaymentChannel type={data.payment_type} label={data.status === "paid" ? channel + "付款已确认" : channel + "付款"} />
                 </Chip>
                 <h1 className="mt-2 text-lg font-semibold">{data.name}</h1>
                 <p className="mt-1 text-xs text-muted">
@@ -83,6 +84,12 @@ export function Pay() {
                 <div className="payment-amount">
                   {money(data.pay_amount_cents)}
                 </div>
+                {data.discount_cents > 0 && (
+                  <div className="mt-1 flex flex-wrap items-center justify-center gap-3 text-xs">
+                    <span className="text-muted">原价 <s>{money(data.amount_cents)}</s></span>
+                    <span className="font-medium text-success">已优惠 {money(data.discount_cents)}</span>
+                  </div>
+                )}
               </div>
               {data.status === "paid" ? (
                 <div className="payment-success">
