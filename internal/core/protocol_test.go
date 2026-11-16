@@ -65,7 +65,7 @@ func TestNotice(t *testing.T) {
 		{AlipayPackage, "张三通过扫码向你付款0.00元"}, {AlipayPackage, "成功收款1.001元"},
 		{AlipayPackage, "成功收款01.01元"}, {AlipayPackage, "成功收款1000000元"},
 		{AlipayPackage, "退款到账1元"}, {AlipayPackage, "收款失败1元"},
-		{AlipayPackage, "待付款1元"}, {AlipayPackage, "成功收款1元，余额2元"},
+		{AlipayPackage, "未成功收款1元"}, {AlipayPackage, "收款1元，交易已取消"}, {AlipayPackage, "待付款1元"}, {AlipayPackage, "成功收款1元，余额2元"},
 		{WechatPackage, "微信支付收款1元；微信支付收款1元"},
 		{WechatPackage, "张三通过扫码向你付款1元"}, {AlipayPackage, "微信支付收款1元"},
 		{"com.other.app", "微信支付收款1元"},

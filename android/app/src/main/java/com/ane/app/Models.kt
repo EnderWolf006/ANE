@@ -12,7 +12,7 @@ object NoticeParser {
     private val wechat = Regex("微信(?:支付)?收款[：:\\s]*[¥￥]?[\\s]*([0-9][0-9.,]*)[\\s]*元")
     private val money = Regex("[0-9][0-9.,]*[\\s]*元")
     private val validMoney = Regex("^(0|[1-9][0-9]{0,5})(\\.[0-9]{1,2})?$")
-    private val negative = Regex("退款|退还|收款失败|支付失败|收款取消|交易关闭|待收款|待付款|待支付|付款请求")
+    private val negative = Regex("退款|退还|失败|取消|撤销|未成功|未到账|未收款|未付款|未支付|交易关闭|待确认|待收款|待付款|待支付|付款请求")
     data class Payment(val cents: Long)
     fun supported(packageName: String) = packageName == ALIPAY || packageName == WECHAT
     fun label(packageName: String) = if (packageName == WECHAT) "微信支付" else "支付宝"

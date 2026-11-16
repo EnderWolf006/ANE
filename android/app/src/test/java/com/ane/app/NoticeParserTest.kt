@@ -15,7 +15,7 @@ class NoticeParserTest {
         cases.forEach { (pkg,text,cents) -> assertEquals(text, cents, NoticeParser.parse(pkg,text)!!.cents) }
     }
     @Test fun rejectsAmbiguousFailedAndInvalidReceipts() {
-        listOf("成功收款0.00元", "成功收款1.001元", "成功收款01.01元", "成功收款1000000元", "退款到账1元", "收款失败1元", "待付款1元", "成功收款1元，余额2元", "微信支付收款1元").forEach { assertNull(it, NoticeParser.parse(NoticeParser.ALIPAY,it)) }
+        listOf("成功收款0.00元", "成功收款1.001元", "成功收款01.01元", "成功收款1000000元", "退款到账1元", "收款失败1元", "未成功收款1元", "收款1元，交易已取消", "待付款1元", "成功收款1元，余额2元", "微信支付收款1元").forEach { assertNull(it, NoticeParser.parse(NoticeParser.ALIPAY,it)) }
         assertNull(NoticeParser.parse(NoticeParser.WECHAT,"微信支付收款1元；微信支付收款1元"))
         assertNull(NoticeParser.parse("com.other.app","微信支付收款1元"))
     }

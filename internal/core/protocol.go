@@ -92,7 +92,7 @@ func PaymentLabel(paymentType string) string {
 var alipayReceipt = regexp.MustCompile(`(?:通过扫码向你付款|向你付款|成功收款|收款成功|收款|到账)[：:\s]*[¥￥]?[\s]*([0-9][0-9.,]*)[\s]*元`)
 var wechatReceipt = regexp.MustCompile(`微信(?:支付)?收款[：:\s]*[¥￥]?[\s]*([0-9][0-9.,]*)[\s]*元`)
 var monetaryAmount = regexp.MustCompile(`[0-9][0-9.,]*[\s]*元`)
-var negativeReceipt = regexp.MustCompile(`退款|退还|收款失败|支付失败|收款取消|交易关闭|待收款|待付款|待支付|付款请求`)
+var negativeReceipt = regexp.MustCompile(`退款|退还|失败|取消|撤销|未成功|未到账|未收款|未付款|未支付|交易关闭|待确认|待收款|待付款|待支付|付款请求`)
 
 func ParseNotice(packageName, text string) (int64, error) {
 	pattern := alipayReceipt
