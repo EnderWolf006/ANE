@@ -1,5 +1,14 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Button, Card, Chip, TextArea, TextField, Label } from "@heroui/react";
+import {
+  Avatar,
+  Button,
+  Card,
+  Chip,
+  Label,
+  Meter,
+  Separator,
+  Tooltip,
+} from "@heroui/react";
 import {
   Activity,
   ArrowDownRight,
@@ -12,22 +21,22 @@ import {
   CheckCircle2,
   Clock3,
   Copy,
+  Download,
   KeyRound,
   Link2,
   Mail,
   Plus,
-  Power,
   Radio,
+  RotateCcw,
   RotateCw,
   Search,
-  ShieldCheck,
+  Send,
   Smartphone,
   Upload,
   Wifi,
 } from "lucide-react";
 import {
   api,
-  maskAppKey,
   money,
   scoped,
   time,
@@ -49,6 +58,8 @@ import {
   Notice,
   Pagination,
   Panel,
+  SkeletonMetrics,
+  SkeletonTable,
   Status,
   Toggle,
   useLoad,
@@ -68,47 +79,54 @@ type Dashboard = {
   unmatched: number;
   online_devices: number;
 };
+
 function Guard({
   loading,
   error,
+  fallback,
   children,
 }: {
   loading: boolean;
   error: string;
+  fallback?: ReactNode;
   children: ReactNode;
 }) {
   return error ? (
     <Notice error>{error}</Notice>
   ) : loading ? (
-    <Loading />
+    <>{fallback || <Loading />}</>
   ) : (
     <>{children}</>
   );
 }
+
 function Metric({
   label,
   value,
   note,
   icon,
+  tone = "accent",
 }: {
   label: string;
   value: string;
   note: string;
   icon: ReactNode;
+  tone?: "accent" | "success" | "warning" | "neutral";
 }) {
   return (
-    <Card className="metric-card">
+    <Card className={`metric-card stagger-card tone-${tone}`}>
       <Card.Content>
-        <div className="flex items-center justify-between text-xs text-muted">
-          {label}
-          <span className="metric-icon">{icon}</span>
+        <div className="flex items-center justify-between text-xs font-medium text-muted">
+          <span>{label}</span>
+          <span className={`metric-icon tone-${tone}`}>{icon}</span>
         </div>
         <div className="metric-value">{value}</div>
-        <p className="text-[11px] text-muted">{note}</p>
+        <p className="text-[11px] leading-5 text-muted">{note}</p>
       </Card.Content>
     </Card>
   );
 }
+
 function OrderTable({
   label,
   orders,
@@ -121,8 +139,10 @@ function OrderTable({
   return (
     <DataTable
       label={label}
+      emptyTitle="暂无交易订单"
+      emptyDescription="业务应用发起收款后，交易订单和回调进度会实时展示在这里。"
       headers={[
-        "订单",
+        "订单号",
         "应用 / 支付渠道",
         "原金额",
         "实收",
@@ -134,31 +154,40 @@ function OrderTable({
         <Button
           size="sm"
           variant="ghost"
-          className="h-auto justify-start p-0 font-mono text-xs"
+          className="h-auto justify-start px-1.5 py-0.5 font-mono text-xs text-accent-soft-foreground hover:text-accent"
           onPress={() => onSelect(o)}
         >
           {o.out_trade_no}
         </Button>,
         <div>
-          {o.app_id || "默认应用"}
-          <p className="text-xs text-muted"><PaymentChannel type={o.payment_type} /></p>
+          <div className="font-medium text-foreground">
+            {o.app_id || "默认应用"}
+          </div>
+          <p className="mt-0.5 text-xs text-muted">
+            <PaymentChannel type={o.payment_type} />
+          </p>
         </div>,
-        money(o.amount_cents),
-        <div>
-          {money(o.pay_amount_cents)}
+        <span className="tabular-nums text-muted">{money(o.amount_cents)}</span>,
+        <div className="tabular-nums">
+          <div className="font-semibold text-foreground">
+            {money(o.pay_amount_cents)}
+          </div>
           {o.discount_cents > 0 && (
-            <p className="text-xs text-success">
+            <p className="mt-0.5 text-[11px] font-medium text-success">
               优惠 {money(o.discount_cents)}
             </p>
           )}
         </div>,
         <Status value={o.status} />,
         <Status value={o.callback_status} />,
-        <span className="text-xs text-muted">{time(o.created_at)}</span>,
+        <span className="text-xs text-muted tabular-nums">
+          {time(o.created_at)}
+        </span>,
       ])}
     />
   );
 }
+
 export function Overview(p: PageProps) {
   const [selected, setSelected] = useState<Order>();
   const r = useLoad(
@@ -172,36 +201,90 @@ export function Overview(p: PageProps) {
   );
   const d = r.data?.[0].data,
     device = r.data?.[2].data[0];
+
+  const paidRate =
+    d && d.orders > 0 ? Math.round((d.paid / d.orders) * 100) : 0;
+
   return (
-    <Guard {...r}>
+    <Guard {...r} fallback={<SkeletonMetrics />}>
       {d && (
         <>
+          <div className="overview-hero">
+            <div className="overview-hero-main">
+              <div className="flex flex-wrap items-center gap-2">
+                <Chip
+                  size="sm"
+                  variant="soft"
+                  color={device?.online ? "success" : "warning"}
+                  className="gap-1.5 font-medium"
+                >
+                  <span
+                    className={
+                      "status-dot " + (device?.online ? "is-live" : "")
+                    }
+                  />
+                  {device?.online ? "收款设备在线监听中" : "收款设备未在线"}
+                </Chip>
+                <Chip size="sm" variant="soft" color="accent" className="tabular-nums">
+                  成交转化 {paidRate}%
+                </Chip>
+              </div>
+              <h2>今日实收 {money(d.today_cents)}</h2>
+              <p>
+                累计已确认 {d.paid} 笔付款，当前有 {d.pending} 笔订单处于待付款窗口期。
+              </p>
+            </div>
+            <div className="overview-hero-actions">
+              <Button
+                size="sm"
+                variant="primary"
+                onPress={() => p.navigate("orders")}
+              >
+                查看交易订单
+                <ArrowRight size={15} />
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onPress={() => p.navigate("device")}
+              >
+                <Smartphone size={15} />
+                设备状态
+              </Button>
+            </div>
+          </div>
+
           <div className="metrics-grid">
             <Metric
               label="累计实收"
               value={money(d.revenue_cents)}
               note={"今日实收 " + money(d.today_cents)}
               icon={<ArrowUpRight size={17} />}
+              tone="accent"
             />
             <Metric
               label="已付订单"
               value={String(d.paid)}
               note={"共 " + d.orders + " 笔交易订单"}
               icon={<CheckCircle2 size={17} />}
+              tone="success"
             />
             <Metric
               label="待付款订单"
               value={String(d.pending)}
               note="有效期内占用优惠金额位"
               icon={<Clock3 size={17} />}
+              tone="warning"
             />
             <Metric
               label="累计优惠"
               value={money(d.discount_cents)}
               note="仅统计已付款订单的让利"
               icon={<ArrowDownRight size={17} />}
+              tone="neutral"
             />
           </div>
+
           <div className="overview-columns">
             <Panel
               title="监听设备"
@@ -211,17 +294,59 @@ export function Overview(p: PageProps) {
               {device ? (
                 <>
                   <div className="device-summary">
-                    <div className="phone-mark">
-                      <Smartphone size={30} strokeWidth={1.3} />
+                    <div
+                      className={
+                        "phone-mark " + (device.online ? "is-online" : "")
+                      }
+                    >
+                      <Smartphone size={28} strokeWidth={1.5} />
                     </div>
-                    <div>
-                      <h3 className="font-semibold">{device.name}</h3>
-                      <p className="mt-1 text-xs text-muted">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate text-[15px] font-semibold">
+                        {device.name}
+                      </h3>
+                      <p className="mt-1 truncate text-xs text-muted">
                         {device.model || "等待首次设备连接"}
                       </p>
                     </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onPress={() => p.navigate("device")}
+                    >
+                      管理
+                      <ArrowUpRight size={14} />
+                    </Button>
                   </div>
-                  <div className="grid grid-cols-3 gap-4 border-t border-border pt-5">
+
+                  {device.battery >= 0 && (
+                    <div className="mb-4">
+                      <Meter
+                        aria-label="设备电量"
+                        value={device.battery}
+                        color={
+                          device.battery <= 20
+                            ? "danger"
+                            : device.battery <= 40
+                              ? "warning"
+                              : "success"
+                        }
+                        size="sm"
+                      >
+                        <div className="mb-1.5 flex items-center justify-between text-xs">
+                          <span className="text-muted">
+                            {device.charging ? "充电中电量" : "设备电量"}
+                          </span>
+                          <Meter.Output className="font-semibold tabular-nums" />
+                        </div>
+                        <Meter.Track>
+                          <Meter.Fill />
+                        </Meter.Track>
+                      </Meter>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-3 gap-4 border-t border-separator pt-4">
                     <KV
                       label="电量"
                       value={device.battery < 0 ? "—" : device.battery + "%"}
@@ -231,48 +356,87 @@ export function Overview(p: PageProps) {
                       value={networkLabel(device.network, device.wifi_ssid)}
                     />
                     <KV
-                      label="监听"
+                      label="监听服务"
                       value={device.listener_connected ? "已连接" : "未连接"}
                     />
                   </div>
-                  <p className="mt-5 text-[11px] text-muted">
-                    最近心跳 {time(device.last_seen)}
+                  <p className="mt-4 text-[11px] text-muted tabular-nums">
+                    最近心跳 · {time(device.last_seen)}
                   </p>
                 </>
               ) : (
                 <Empty
                   title="连接你的收款设备"
-                  description="在监听设备页面生成令牌，然后配置 ANE。"
+                  description="在监听设备页面生成令牌，然后配置 ANE 客户端。"
+                  action={
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onPress={() => p.navigate("device")}
+                    >
+                      前往配置设备
+                      <ArrowRight size={14} />
+                    </Button>
+                  }
                 />
               )}
             </Panel>
+
             <Panel title="需要关注" description="及时处理异常，保持收款顺畅">
-              <div className="attention-row">
-                <div className="attention-icon">
-                  <Activity size={18} />
-                </div>
-                <div className="flex-1">
-                  <h3>未匹配收款</h3>
-                  <p>核对金额与支付账单</p>
-                </div>
-                <b>{d.unmatched}</b>
-              </div>
-              <div className="attention-row">
-                <div className="attention-icon">
-                  <Link2 size={18} />
-                </div>
-                <div className="flex-1">
-                  <h3>回调失败</h3>
-                  <p>检查业务接口后可以重试</p>
-                </div>
-                <b>{d.failed_callbacks}</b>
-              </div>
-              <div className="rounded-xl bg-surface-secondary p-4 text-xs leading-6 text-muted">
-                <Bell size={14} className="mr-2 inline" />
-                前往通知订阅，开启设备离线和回调失败提醒。
+              <div className="attention-list">
+                <button
+                  type="button"
+                  className={
+                    "attention-row " + (d.unmatched > 0 ? "has-alert" : "")
+                  }
+                  onClick={() => p.navigate("events")}
+                >
+                  <div className="attention-icon">
+                    <Activity size={18} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3>未匹配收款</h3>
+                    <p>核对金额与支付账单</p>
+                  </div>
+                  <b>{d.unmatched}</b>
+                </button>
+
+                <button
+                  type="button"
+                  className={
+                    "attention-row " +
+                    (d.failed_callbacks > 0 ? "has-alert" : "")
+                  }
+                  onClick={() => p.navigate("orders")}
+                >
+                  <div className="attention-icon">
+                    <Link2 size={18} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3>回调失败</h3>
+                    <p>检查业务接口后可以一键重试</p>
+                  </div>
+                  <b>{d.failed_callbacks}</b>
+                </button>
+
+                <button
+                  type="button"
+                  className="attention-row"
+                  onClick={() => p.navigate("subscriptions")}
+                >
+                  <div className="attention-icon">
+                    <Bell size={17} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3>异常邮件提醒</h3>
+                    <p>开启设备离线与回调失败通知订阅</p>
+                  </div>
+                  <ArrowRight size={15} className="text-muted" />
+                </button>
               </div>
             </Panel>
           </div>
+
           <Panel
             title="最近交易"
             description="最近 5 笔订单及其支付状态"
@@ -303,6 +467,7 @@ export function Overview(p: PageProps) {
     </Guard>
   );
 }
+
 const initialOrderFilters = {
   status: "all",
   callback_status: "all",
@@ -312,17 +477,20 @@ const initialOrderFilters = {
   end: "",
   sort: "newest",
 };
+
 export function Orders(p: PageProps) {
   const [page, setPage] = useState(1),
     [query, setQuery] = useState(""),
     [search, setSearch] = useState(""),
     [filters, setFilters] = useState(initialOrderFilters),
     [selected, setSelected] = useState<Order>();
+
   const apps = useLoad(
     () =>
       api<{ data: { name: string }[] }>(scoped("orders/filters", p.merchant)),
     [p.merchant, p.refresh],
   );
+
   const paramsForOrders = () => {
     const params = new URLSearchParams({
       page: String(page),
@@ -336,6 +504,7 @@ export function Orders(p: PageProps) {
     if (filters.end) params.set("end", filters.end);
     return params;
   };
+
   const r = useLoad(
     () =>
       api<{ data: Order[]; has_more: boolean }>(
@@ -343,17 +512,19 @@ export function Orders(p: PageProps) {
       ),
     [p.refresh, p.merchant, page, search, filters],
   );
+
   const change = (key: keyof typeof filters, value: string) => {
     setFilters((f) => ({ ...f, [key]: value }));
     setPage(1);
   };
+
   return (
     <>
       <Panel
         title="交易记录"
         description="点击订单号查看完整信息与回调记录"
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
               variant="tertiary"
@@ -364,6 +535,7 @@ export function Orders(p: PageProps) {
                 setPage(1);
               }}
             >
+              <RotateCcw size={14} />
               重置筛选
             </Button>
             <Button
@@ -389,12 +561,13 @@ export function Orders(p: PageProps) {
                 }, "导出完成")
               }
             >
+              <Download size={14} />
               导出 CSV
             </Button>
           </div>
         }
       >
-        <div className="mb-5 overflow-x-auto pb-1">
+        <div className="filter-bar overflow-x-auto">
           <div className="order-filters">
             <form
               className="filter-search flex items-end gap-2"
@@ -416,7 +589,7 @@ export function Orders(p: PageProps) {
                 variant="secondary"
                 aria-label="搜索订单"
               >
-                <Search size={17} />
+                <Search size={16} />
               </Button>
             </form>
             <Choice
@@ -490,8 +663,13 @@ export function Orders(p: PageProps) {
           </div>
         </div>
 
-        {apps.error && <Notice error>{apps.error}</Notice>}
-        <Guard {...r}>
+        {apps.error && (
+          <div className="mb-4">
+            <Notice error>{apps.error}</Notice>
+          </div>
+        )}
+
+        <Guard {...r} fallback={<SkeletonTable rows={6} />}>
           <OrderTable
             label="交易订单"
             orders={r.data?.data || []}
@@ -512,6 +690,7 @@ export function Orders(p: PageProps) {
     </>
   );
 }
+
 function OrderDetails({
   p,
   order: selected,
@@ -521,40 +700,94 @@ function OrderDetails({
   order?: Order;
   onClose: () => void;
 }) {
+  const copyText = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      p.notify(label + "已复制");
+    } catch {
+      p.notify("复制失败，请重试");
+    }
+  };
+
   return (
     <Dialog title="订单详情" open={!!selected} onClose={onClose}>
       {selected && (
         <>
-          <div className="grid grid-cols-2 gap-5">
-            <KV label="商户订单号" value={selected.out_trade_no} />
-            <KV label="应用" value={selected.app_id || "默认应用"} />
-            <KV label="支付渠道" value={<PaymentChannel type={selected.payment_type} />} />
-            <KV label="商品" value={selected.name} />
-            <KV label="原金额" value={money(selected.amount_cents)} />
-            <KV label="实收" value={money(selected.pay_amount_cents)} />
-            {selected.discount_cents > 0 && (
-              <KV label="优惠" value={money(selected.discount_cents)} />
-            )}
-            <KV label="订单状态" value={<Status value={selected.status} />} />
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-surface-secondary p-4">
+            <div>
+              <p className="text-xs text-muted">实收金额</p>
+              <div className="mt-1 flex items-baseline gap-2.5 tabular-nums">
+                <span className="text-2xl font-bold tracking-tight text-accent">
+                  {money(selected.pay_amount_cents)}
+                </span>
+                {selected.discount_cents > 0 && (
+                  <span className="text-xs text-muted">
+                    原价 <s>{money(selected.amount_cents)}</s> · 优惠{" "}
+                    <span className="font-medium text-success">
+                      {money(selected.discount_cents)}
+                    </span>
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Status value={selected.status} />
+              <Status value={selected.callback_status} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <KV
-              label="回调状态"
-              value={<Status value={selected.callback_status} />}
+              label="商户订单号"
+              value={
+                <span className="inline-flex items-center gap-1.5 font-mono text-xs">
+                  {selected.out_trade_no}
+                  <Button
+                    isIconOnly
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 min-w-6"
+                    aria-label="复制商户订单号"
+                    onPress={() =>
+                      copyText(selected.out_trade_no, "商户订单号")
+                    }
+                  >
+                    <Copy size={12} />
+                  </Button>
+                </span>
+              }
             />
+            <KV label="应用" value={selected.app_id || "默认应用"} />
+            <KV
+              label="支付渠道"
+              value={<PaymentChannel type={selected.payment_type} />}
+            />
+            <KV label="商品名称" value={selected.name} />
             <KV label="创建时间" value={time(selected.created_at)} />
             <KV label="付款时间" value={time(selected.paid_at)} />
           </div>
-          <KV label="平台订单号" value={selected.trade_no} />
-          <KV label="异步回调" value={selected.notify_url} />
-          <KV label="同步返回" value={selected.return_url || "—"} />
-          <KV label="附加参数" value={selected.param || "—"} />
-          <div className="rounded-xl bg-surface-secondary p-4">
-            <p className="mb-2 text-xs text-muted">
-              回调尝试 {selected.callback_attempts} 次
-            </p>
-            <pre className="whitespace-pre-wrap break-all text-xs leading-6">
+
+          <Separator />
+
+          <div className="space-y-3">
+            <KV label="平台订单号" value={selected.trade_no} mono />
+            <KV label="异步回调" value={selected.notify_url} mono />
+            <KV label="同步返回" value={selected.return_url || "—"} mono />
+            <KV label="附加参数" value={selected.param || "—"} mono />
+          </div>
+
+          <div className="rounded-xl border border-border bg-surface-secondary p-4">
+            <div className="mb-2 flex items-center justify-between text-xs text-muted">
+              <span>最近回调响应</span>
+              <span className="tabular-nums">
+                已尝试 {selected.callback_attempts} 次
+              </span>
+            </div>
+            <pre className="whitespace-pre-wrap break-all font-mono text-xs leading-6 text-foreground">
               {selected.callback_result || "暂无回调响应"}
             </pre>
           </div>
+
           {selected.status === "paid" && (
             <Button
               variant="secondary"
@@ -573,8 +806,8 @@ function OrderDetails({
                 }, "已安排回调重试")
               }
             >
-              <RotateCw size={16} />
-              重发回调
+              <RotateCw size={15} />
+              重发异步回调
             </Button>
           )}
         </>
@@ -582,6 +815,7 @@ function OrderDetails({
     </Dialog>
   );
 }
+
 export function Events(p: PageProps) {
   const [page, setPage] = useState(1);
   const r = useLoad(
@@ -594,25 +828,33 @@ export function Events(p: PageProps) {
       title="设备通知记录"
       description="原始通知时间用于区分已释放、重新分配的付款金额"
     >
-      <Guard {...r}>
+      <Guard {...r} fallback={<SkeletonTable rows={6} />}>
         <DataTable
           label="收款通知"
+          emptyTitle="暂无收款通知"
+          emptyDescription="收款手机捕获到支付宝或微信收款推送后，将自动上报并显示在此。"
           headers={["通知内容", "收款金额", "匹配结果", "通知 / 上报时间"]}
           rows={(r.data?.data || []).slice(0, 30).map((e) => [
-            <div className="max-w-sm">
-              <p className="mb-1 text-xs text-muted"><PaymentChannel type={e.payment_type} /></p>
-              <p>{e.raw_text}</p>
-              <p className="mt-1 text-xs text-muted">{e.reason}</p>
+            <div className="max-w-md space-y-1">
+              <div className="text-xs text-muted">
+                <PaymentChannel type={e.payment_type} />
+              </div>
+              <p className="text-[13px] font-medium leading-5 text-foreground">
+                {e.raw_text}
+              </p>
+              {e.reason && (
+                <p className="text-xs text-muted">{e.reason}</p>
+              )}
               {e.trade_no && (
-                <p className="mt-1 font-mono text-[10px] text-muted">
-                  {e.trade_no}
-                </p>
+                <p className="font-mono text-[11px] text-muted">{e.trade_no}</p>
               )}
             </div>,
-            money(e.amount),
+            <span className="font-semibold tabular-nums text-foreground">
+              {money(e.amount)}
+            </span>,
             <Status value={e.status} />,
-            <div className="text-xs">
-              {time(e.posted_at)}
+            <div className="text-xs tabular-nums">
+              <div>{time(e.posted_at)}</div>
               <p className="mt-1 text-muted">{time(e.received_at)}</p>
             </div>,
           ])}
@@ -626,6 +868,7 @@ export function Events(p: PageProps) {
     </Panel>
   );
 }
+
 export function Pools(p: PageProps) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -637,21 +880,42 @@ export function Pools(p: PageProps) {
     [p.refresh, p.merchant, tick],
   );
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <Notice>
         微信与支付宝各自按充值金额独立分配，同一渠道的所有应用共享优惠池。从
-        −¥0.00（不优惠）开始。优先复用最小空位，按需扩容；付款或超时后释放，尾部空位自动收缩。
+        −¥0.00（不优惠）开始，优先复用最小空位、按需扩容；付款或超时后释放，尾部空位自动收缩。
       </Notice>
-      <Guard loading={r.loading && !r.data} error={r.error}>
+      <Guard
+        loading={r.loading && !r.data}
+        error={r.error}
+        fallback={<SkeletonTable rows={4} />}
+      >
         {r.data?.data.length ? (
           <div className="grid gap-5 xl:grid-cols-2">
             {r.data.data.map((pool) => {
               const occupied = new Map(pool.slots.map((s) => [s.discount, s]));
               const visible = Math.min(pool.capacity, 80);
+              const utilization =
+                pool.pool_limit > 0
+                  ? Math.round((pool.occupied / pool.pool_limit) * 100)
+                  : 0;
               return (
                 <Panel
-                  key={pool.merchant_id + ":" + pool.payment_type + ":" + pool.amount_cents}
-                  title={<span className="flex flex-wrap items-center gap-2"><PaymentChannel type={pool.payment_type} /><span>{money(pool.amount_cents)} 充值池</span></span>}
+                  key={
+                    pool.merchant_id +
+                    ":" +
+                    pool.payment_type +
+                    ":" +
+                    pool.amount_cents
+                  }
+                  title={
+                    <span className="flex flex-wrap items-center gap-2">
+                      <PaymentChannel type={pool.payment_type} />
+                      <span className="tabular-nums">
+                        {money(pool.amount_cents)} 充值池
+                      </span>
+                    </span>
+                  }
                   description={
                     "已启用 " +
                     pool.capacity +
@@ -664,56 +928,91 @@ export function Pools(p: PageProps) {
                   }
                   action={
                     <Chip
+                      size="sm"
                       variant="soft"
                       color={pool.occupied ? "accent" : "default"}
+                      className="gap-1.5 font-medium"
                     >
+                      <span
+                        className={
+                          "status-dot " + (pool.occupied ? "is-live" : "")
+                        }
+                      />
                       {pool.occupied ? "使用中" : "空闲"}
                     </Chip>
                   }
                 >
+                  <div className="mb-4">
+                    <Meter
+                      aria-label="优惠位占用比例"
+                      value={utilization}
+                      color={
+                        utilization >= 80
+                          ? "danger"
+                          : utilization >= 50
+                            ? "warning"
+                            : "accent"
+                      }
+                      size="sm"
+                    >
+                      <div className="mb-1.5 flex items-center justify-between text-xs">
+                        <span className="text-muted">当前池负载</span>
+                        <span className="font-semibold tabular-nums text-foreground">
+                          {pool.occupied} / {pool.pool_limit} ({utilization}%)
+                        </span>
+                      </div>
+                      <Meter.Track>
+                        <Meter.Fill />
+                      </Meter.Track>
+                    </Meter>
+                  </div>
+
                   <div className="pool-grid">
                     {Array.from({ length: visible }, (_, i) => i).map(
-                      (slot) => (
-                        <div
-                          key={slot}
-                          className={
-                            "pool-slot " +
-                            (occupied.has(slot) ? "occupied" : "available")
-                          }
-                          title={
-                            occupied.has(slot)
-                              ? occupied.get(slot)!.out_trade_no +
-                                " · " +
-                                time(occupied.get(slot)!.expires_at)
-                              : "可分配：优惠 " + money(slot)
-                          }
-                        >
-                          <span>−{(slot / 100).toFixed(2)}</span>
-                          <small>
-                            {occupied.has(slot) ? "占用" : "可复用"}
-                          </small>
-                        </div>
-                      ),
+                      (slot) => {
+                        const info = occupied.get(slot);
+                        return (
+                          <Tooltip key={slot} delay={150}>
+                            <Tooltip.Trigger>
+                              <div
+                                className={
+                                  "pool-slot " +
+                                  (info ? "occupied" : "available")
+                                }
+                              >
+                                <span>−{(slot / 100).toFixed(2)}</span>
+                                <small>{info ? "占用" : "可复用"}</small>
+                              </div>
+                            </Tooltip.Trigger>
+                            <Tooltip.Content placement="top">
+                              {info
+                                ? `${info.out_trade_no} · 截止 ${time(info.expires_at)}`
+                                : `可分配 · 优惠 ${money(slot)}`}
+                            </Tooltip.Content>
+                          </Tooltip>
+                        );
+                      },
                     )}
                   </div>
+
                   {pool.capacity > visible && (
                     <p className="mt-3 text-xs text-muted">
-                      还有 {pool.capacity - visible}{" "}
-                      个优惠位，完整占用数见上方。
+                      还有 {pool.capacity - visible} 个优惠位，完整占用数见上方。
                     </p>
                   )}
                   {pool.capacity < pool.pool_limit && (
                     <p className="mt-3 text-xs leading-6 text-muted">
-                      还可按需启用 {pool.pool_limit - pool.capacity} 个优惠位，优先复用空位；有新订单时自动分配。
+                      还可按需启用 {pool.pool_limit - pool.capacity}{" "}
+                      个优惠位，优先复用空位；有新订单时自动分配。
                     </p>
                   )}
-                  <div className="mt-5 flex gap-5 text-[10px] text-muted">
+                  <div className="mt-4 flex gap-5 border-t border-separator pt-3 text-[11px] text-muted">
                     <span>
                       <i className="legend-dot bg-accent" />
                       已占用
                     </span>
                     <span>
-                      <i className="legend-dot border border-accent" />
+                      <i className="legend-dot border border-accent bg-accent-soft" />
                       可复用
                     </span>
                   </div>
@@ -726,13 +1025,27 @@ export function Pools(p: PageProps) {
             title="暂无占用中的金额池"
             description="没有占用的池子会自动隐藏，新订单分配后重新显示。"
           >
-            <Empty description="无需手动创建金额池。可在商户配置中设置容量上限。" />
+            <Empty
+              title="当前全部空闲"
+              description="无需手动创建金额池。可在商户配置中设置容量上限。"
+              action={
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onPress={() => p.navigate("settings")}
+                >
+                  调整池容量配置
+                  <ArrowRight size={14} />
+                </Button>
+              }
+            />
           </Panel>
         )}
       </Guard>
     </div>
   );
 }
+
 function networkLabel(n: string, ssid?: string) {
   if (n === "wifi") return ssid ? "Wi-Fi · " + ssid : "Wi-Fi · 名称未获取";
   return (
@@ -749,6 +1062,7 @@ function networkLabel(n: string, ssid?: string) {
     )[n] || n
   );
 }
+
 export function Devices(p: PageProps) {
   const [tick, setTick] = useState(0),
     [name, setName] = useState("收款手机"),
@@ -757,21 +1071,29 @@ export function Devices(p: PageProps) {
       token: string;
       server_url: string;
     }>();
+
   useEffect(() => {
     const t = setInterval(() => setTick((n) => n + 1), 15000);
     return () => clearInterval(t);
   }, []);
+
   const r = useLoad(
     () => api<{ data: Device[] }>(scoped("device", p.merchant)),
     [p.merchant, p.refresh, tick],
   );
   const d = r.data?.data[0];
+
   useEffect(() => {
     setName(d?.name || "收款手机");
   }, [d?.name, p.merchant]);
+
   return (
-    <div className="space-y-6">
-      <Guard loading={r.loading && !r.data} error={r.error}>
+    <div className="space-y-5">
+      <Guard
+        loading={r.loading && !r.data}
+        error={r.error}
+        fallback={<SkeletonTable rows={3} />}
+      >
         {d ? (
           <Panel
             title={d.name}
@@ -787,61 +1109,87 @@ export function Devices(p: PageProps) {
             }
           >
             <div className="device-metrics">
-              <div>
+              <div className="device-metric-tile">
                 <div className="device-metric-icon">
                   {d.charging ? (
-                    <BatteryCharging size={24} />
+                    <BatteryCharging size={19} />
                   ) : (
-                    <Battery size={24} />
+                    <Battery size={19} />
                   )}
                 </div>
                 <strong>{d.battery < 0 ? "—" : d.battery + "%"}</strong>
                 <span>{d.charging ? "正在充电" : "剩余电量"}</span>
+                {d.battery >= 0 && (
+                  <Meter
+                    aria-label="电量进度"
+                    value={d.battery}
+                    size="sm"
+                    color={
+                      d.battery <= 20
+                        ? "danger"
+                        : d.battery <= 40
+                          ? "warning"
+                          : "success"
+                    }
+                    className="mt-1"
+                  >
+                    <Meter.Track>
+                      <Meter.Fill />
+                    </Meter.Track>
+                  </Meter>
+                )}
               </div>
-              <div>
+
+              <div className="device-metric-tile">
                 <div className="device-metric-icon">
-                  <Wifi size={24} />
+                  <Wifi size={19} />
                 </div>
-                <strong className="!text-xl">
+                <strong className="!text-lg">
                   {networkLabel(d.network, d.wifi_ssid)}
                 </strong>
                 <span>
                   {d.network_validated ? "互联网已验证" : "互联网未验证"}
                 </span>
               </div>
-              <div>
+
+              <div className="device-metric-tile">
                 <div className="device-metric-icon">
-                  <Radio size={24} />
+                  <Radio size={19} />
                 </div>
                 <strong>{d.online ? "在线" : "离线"}</strong>
                 <span>3 分钟无心跳判定离线</span>
               </div>
-              <div>
+
+              <div className="device-metric-tile">
                 <div className="device-metric-icon">
-                  <Activity size={24} />
+                  <Activity size={19} />
                 </div>
                 <strong>{d.pending_events}</strong>
                 <span>手机待上报通知</span>
               </div>
             </div>
-            <div className="grid gap-6 border-t border-border pt-6 sm:grid-cols-2 xl:grid-cols-4">
+
+            <div className="grid gap-5 border-t border-separator pt-5 sm:grid-cols-2 xl:grid-cols-4">
               <KV label="最近心跳" value={time(d.last_seen)} />
               <KV
                 label="通知监听"
-                value={d.listener_connected ? "已连接" : "未连接"}
+                value={
+                  <Status
+                    value={d.listener_connected ? "online" : "offline"}
+                  />
+                }
               />
               <KV
                 label="前台服务"
-                value={d.service_running ? "运行中" : "未运行"}
+                value={
+                  <Status value={d.service_running ? "enabled" : "disabled"} />
+                }
               />
-              <KV label="客户端版本" value={d.version || "—"} />
+              <KV label="客户端版本" value={d.version || "—"} mono />
               <KV
                 label="设备绑定标识"
-                value={
-                  <span className="font-mono text-xs">
-                    {d.installation_id || "首次连接时自动绑定"}
-                  </span>
-                }
+                value={d.installation_id || "首次连接时自动绑定"}
+                mono
               />
               <KV label="绑定时间" value={time(d.bound_at)} />
               <KV
@@ -862,16 +1210,17 @@ export function Devices(p: PageProps) {
           >
             <Empty
               title="尚未配置设备"
-              description="下方生成连接令牌，复制到 ANE 即可连接。"
+              description="下方生成连接令牌，复制到 ANE 客户端即可开始实时监听。"
             />
           </Panel>
         )}
       </Guard>
+
       <Panel
         title={d ? "设备连接管理" : "创建设备连接"}
         description="重置连接会立即使旧令牌失效，并解除旧设备绑定。"
       >
-        <div className="flex flex-wrap items-end gap-4">
+        <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-64 flex-1">
             <Field label="设备名称" value={name} onChange={setName} />
           </div>
@@ -893,7 +1242,7 @@ export function Devices(p: PageProps) {
             isPending={p.busy}
             onPress={() => setConfirm("reset")}
           >
-            <KeyRound size={16} />
+            <KeyRound size={15} />
             {d ? "重置绑定与令牌" : "生成连接令牌"}
           </Button>
           {d && !d.revoked && (
@@ -902,11 +1251,12 @@ export function Devices(p: PageProps) {
             </Button>
           )}
         </div>
-        <p className="mt-5 text-xs leading-6 text-muted">
+        <p className="mt-4 text-xs leading-6 text-muted">
           客户端默认每 15 秒上报心跳（可配置），页面每 15
-          秒更新。在线仅代表设备在通信，请同时检查通知监听与前台服务状态。
+          秒自动同步。在线仅代表设备在通信，请同时检查通知监听与前台服务状态。
         </p>
       </Panel>
+
       <Dialog
         title={confirm === "reset" ? "生成新的设备连接？" : "撤销设备连接？"}
         open={!!confirm}
@@ -946,6 +1296,7 @@ export function Devices(p: PageProps) {
             : "撤销后手机无法继续发送通知或心跳，待上报通知会保留在手机中。"}
         </p>
       </Dialog>
+
       <Dialog
         title="保存设备连接信息"
         open={!!credentials}
@@ -957,6 +1308,7 @@ export function Devices(p: PageProps) {
             <Field label="服务端地址" value={credentials.server_url} readOnly />
             <Field label="设备令牌" value={credentials.token} readOnly />
             <Button
+              fullWidth
               onPress={() =>
                 p.run(async () => {
                   await navigator.clipboard.writeText(
@@ -968,7 +1320,7 @@ export function Devices(p: PageProps) {
                 }, "连接信息已复制")
               }
             >
-              <Copy size={16} />
+              <Copy size={15} />
               复制 JSON 连接信息
             </Button>
           </>
@@ -977,6 +1329,7 @@ export function Devices(p: PageProps) {
     </div>
   );
 }
+
 export function SettingsPage(p: PageProps) {
   const r = useLoad(
     () =>
@@ -989,120 +1342,174 @@ export function SettingsPage(p: PageProps) {
   }, [r.data]);
   const set = (v: Partial<Merchant>) =>
     setForm((f) => (f ? { ...f, ...v } : f));
+
   return (
-    <Guard loading={r.loading && !form} error={r.error}>
+    <Guard
+      loading={r.loading && !form}
+      error={r.error}
+      fallback={<SkeletonTable rows={4} />}
+    >
       {form && (
-        <>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              p.run(async () => {
-                await api(scoped("settings", p.merchant), "PUT", {
-                  name: form.name,
-                  qr_image: form.qr_image || "",
-                  wechat_qr_image: form.wechat_qr_image || "",
-                  pool_limit: form.pool_limit,
-                  order_ttl_minutes: form.order_ttl_minutes,
-                  payment_note: form.payment_note,
-                });
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            p.run(async () => {
+              await api(scoped("settings", p.merchant), "PUT", {
+                name: form.name,
+                qr_image: form.qr_image || "",
+                wechat_qr_image: form.wechat_qr_image || "",
+                pool_limit: form.pool_limit,
+                order_ttl_minutes: form.order_ttl_minutes,
+                payment_note: form.payment_note,
               });
-            }}
-          >
-            <div className="grid gap-6 xl:grid-cols-2">
-              <Panel
-                title="收款配置"
-                description="分别配置允许付款人输入金额的支付宝和微信收款码"
-              >
+            });
+          }}
+        >
+          <div className="grid gap-5 xl:grid-cols-2">
+            <Panel
+              title="收款配置"
+              description="分别配置允许付款人输入金额的支付宝和微信收款码"
+            >
+              <div className="space-y-4">
                 <Field
                   label="商户名称"
                   value={form.name}
                   onChange={(v) => set({ name: v })}
                   required
                 />
-                {([['qr_image', '支付宝'], ['wechat_qr_image', '微信支付']] as const).map(([field, channel]) => (
-                  <div key={field} className="mt-5">
-                    <div className="mb-2 flex items-center justify-between">
-                      <Label><PaymentChannel type={field === "wechat_qr_image" ? "wxpay" : "alipay"} label={channel + "收款码"} /></Label>
-                      {form[field] && <Button size="sm" variant="ghost" onPress={() => set({ [field]: "" })}>移除</Button>}
-                    </div>
-                    <div className="qr-upload">
-                      {form[field] ? <img src={form[field]} alt={channel + "收款码"} /> :
-                        <div className="qr-placeholder"><Upload size={28} /><span>上传{channel}收款码</span></div>}
-                      <div>
-                        <label className="file-button"><Upload size={15} />选择图片
-                          <input type="file" aria-label={channel + "收款码"} accept="image/png,image/jpeg" onChange={(e) => {
-                            const f = e.target.files?.[0]; if (!f) return;
-                            if (f.size > 2 * 1024 * 1024) { p.notify("图片不能超过 2 MiB"); return; }
-                            const reader = new FileReader(); reader.onload = () => set({ [field]: String(reader.result) });
-                            reader.onerror = () => p.notify("读取图片失败"); reader.readAsDataURL(f);
-                          }} />
-                        </label>
-                        <p className="mt-2 text-[11px] text-muted">PNG / JPEG，最大 2 MiB</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {(
+                    [
+                      ["qr_image", "支付宝"],
+                      ["wechat_qr_image", "微信支付"],
+                    ] as const
+                  ).map(([field, channel]) => (
+                    <div key={field} className="qr-card">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label>
+                          <PaymentChannel
+                            type={
+                              field === "wechat_qr_image" ? "wxpay" : "alipay"
+                            }
+                            label={channel + "收款码"}
+                          />
+                        </Label>
+                        {form[field] && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs text-danger"
+                            onPress={() => set({ [field]: "" })}
+                          >
+                            移除
+                          </Button>
+                        )}
+                      </div>
+                      <div className="qr-upload">
+                        {form[field] ? (
+                          <img src={form[field]} alt={channel + "收款码"} />
+                        ) : (
+                          <div className="qr-placeholder">
+                            <Upload size={22} />
+                            <span>上传{channel}码</span>
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <label className="file-button">
+                            <Upload size={14} />
+                            选择图片
+                            <input
+                              type="file"
+                              aria-label={channel + "收款码"}
+                              accept="image/png,image/jpeg"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (!f) return;
+                                if (f.size > 2 * 1024 * 1024) {
+                                  p.notify("图片不能超过 2 MiB");
+                                  return;
+                                }
+                                const reader = new FileReader();
+                                reader.onload = () =>
+                                  set({ [field]: String(reader.result) });
+                                reader.onerror = () => p.notify("读取图片失败");
+                                reader.readAsDataURL(f);
+                              }}
+                            />
+                          </label>
+                          <p className="mt-2 text-[11px] leading-5 text-muted">
+                            PNG / JPEG，最大 2 MiB
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-                <p className="text-xs leading-6 text-muted">
-                  新收款码用于后续订单。已创建订单保留当时的收款码，避免付款过程中切换收款账户。
-                </p>
-              </Panel>
-              <Panel
-                title="优惠金额池"
-                description="每个充值金额独立管理，优先分配最小可用优惠"
-              >
-                <div className="space-y-5">
-                  <Field
-                    label="最大容量"
-                    type="number"
-                    value={String(form.pool_limit)}
-                    onChange={(v) => set({ pool_limit: Number(v) })}
-                    min={1}
-                    max={9999}
-                    required
-                    hint={
-                      "每个池子最多 " +
-                      form.pool_limit +
-                      " 个位置（含原价位）；最大让利 " +
-                      money(Math.max(0, form.pool_limit - 1)) +
-                      "。"
-                    }
-                  />
-                  <Field
-                    label="付款有效期（分钟）"
-                    type="number"
-                    value={String(form.order_ttl_minutes)}
-                    onChange={(v) => set({ order_ttl_minutes: Number(v) })}
-                    min={1}
-                    max={60}
-                    required
-                  />
-                  <div className="pool-example">
-                    <span>订单 ¥10.00</span>
-                    <ArrowRight size={15} />
-                    <span>实付 ¥10.00</span>
-                    <Chip size="sm" color="success">
-                      不优惠
-                    </Chip>
-                  </div>
-                  <p className="text-xs leading-6 text-muted">
-                    原价位置被占用时分配 ¥9.99，付款或超时后优先复用
-                    ¥10.00。缩小上限不会取消已有订单，后续分配遵循新上限。
-                  </p>
+                  ))}
                 </div>
-              </Panel>
-            </div>
-            <div className="mt-5 flex justify-end">
-              <Button type="submit" isPending={p.busy}>
-                保存商户配置
-                <Check size={16} />
-              </Button>
-            </div>
-          </form>
-        </>
+                <p className="text-xs leading-6 text-muted">
+                  新收款码仅用于后续订单。已创建订单会保留下单当时的收款码，避免付款过程中切换账户。
+                </p>
+              </div>
+            </Panel>
+
+            <Panel
+              title="优惠金额池策略"
+              description="每个充值金额独立管理，优先分配最小可用优惠"
+            >
+              <div className="space-y-5">
+                <Field
+                  label="最大容量"
+                  type="number"
+                  value={String(form.pool_limit)}
+                  onChange={(v) => set({ pool_limit: Number(v) })}
+                  min={1}
+                  max={9999}
+                  required
+                  hint={
+                    "每个池子最多 " +
+                    form.pool_limit +
+                    " 个位置（含原价位）；最大让利 " +
+                    money(Math.max(0, form.pool_limit - 1)) +
+                    "。"
+                  }
+                />
+                <Field
+                  label="付款有效期（分钟）"
+                  type="number"
+                  value={String(form.order_ttl_minutes)}
+                  onChange={(v) => set({ order_ttl_minutes: Number(v) })}
+                  min={1}
+                  max={60}
+                  required
+                />
+                <div className="pool-example">
+                  <span className="font-medium">订单 ¥10.00</span>
+                  <ArrowRight size={14} className="text-muted" />
+                  <span className="font-semibold text-accent">实付 ¥10.00</span>
+                  <Chip size="sm" variant="soft" color="success">
+                    首笔不优惠
+                  </Chip>
+                  <span className="text-muted">·</span>
+                  <span className="text-muted">并发次笔 ¥9.99</span>
+                </div>
+                <p className="text-xs leading-6 text-muted">
+                  原价位置被占用时分配 ¥9.99，付款或超时后优先复用
+                  ¥10.00。缩小上限不会取消已有订单，后续分配遵循新上限。
+                </p>
+              </div>
+            </Panel>
+          </div>
+          <div className="mt-5 flex justify-end">
+            <Button type="submit" size="md" isPending={p.busy}>
+              <Check size={16} />
+              保存商户配置
+            </Button>
+          </div>
+        </form>
       )}
     </Guard>
   );
 }
+
 export function Merchants(p: PageProps) {
   const r = useLoad(() => api<{ data: Merchant[] }>("merchants"), [p.refresh]);
   const [create, setCreate] = useState(false),
@@ -1115,47 +1522,56 @@ export function Merchants(p: PageProps) {
       pool_limit: 99,
       order_ttl_minutes: 10,
     });
+
   return (
     <>
       <Panel
         title="所有商户"
         description="商户拥有独立登录、密钥、收款码、金额池和监听设备"
         action={
-          <Button onPress={() => setCreate(true)}>
-            <Plus size={16} />
+          <Button size="sm" onPress={() => setCreate(true)}>
+            <Plus size={15} />
             创建商户
           </Button>
         }
       >
-        <Guard {...r}>
+        <Guard {...r} fallback={<SkeletonTable rows={5} />}>
           <DataTable
             label="商户列表"
             headers={[
               "商户",
               "登录账号",
               "角色 / 状态",
-              "应用个数",
+              "应用数",
               "池上限",
               "设备",
               "操作",
             ]}
             rows={(r.data?.data || []).map((m) => [
               <div className="flex items-center gap-3">
-                <div className="merchant-avatar">{m.name.slice(0, 1)}</div>
+                <Avatar size="sm" color="accent" variant="soft">
+                  <Avatar.Fallback className="font-semibold">
+                    {m.name.slice(0, 1).toUpperCase()}
+                  </Avatar.Fallback>
+                </Avatar>
                 <div className="font-medium">
                   {m.name}
-                  <p className="text-xs text-muted">#{m.id}</p>
+                  <p className="text-[11px] text-muted tabular-nums">#{m.id}</p>
                 </div>
               </div>,
-              m.username,
-              <div className="flex gap-2">
-                <Chip size="sm" variant="soft">
+              <span className="font-mono text-xs">{m.username}</span>,
+              <div className="flex flex-wrap gap-1.5">
+                <Chip
+                  size="sm"
+                  variant="soft"
+                  color={m.is_admin ? "accent" : "default"}
+                >
                   {m.is_admin ? "管理员" : "商户"}
                 </Chip>
                 <Status value={m.enabled ? "enabled" : "disabled"} />
               </div>,
-              m.app_count || 0,
-              <span>
+              <span className="tabular-nums">{m.app_count || 0}</span>,
+              <span className="tabular-nums">
                 {m.pool_limit} 位{" "}
                 <small className="text-muted">
                   / {money(m.pool_limit - 1)}
@@ -1177,6 +1593,7 @@ export function Merchants(p: PageProps) {
           />
         </Guard>
       </Panel>
+
       <Dialog
         title="创建商户"
         open={create}
@@ -1240,6 +1657,7 @@ export function Merchants(p: PageProps) {
           />
         </div>
       </Dialog>
+
       <Dialog
         title="管理商户"
         open={!!edit}
@@ -1278,7 +1696,7 @@ export function Merchants(p: PageProps) {
             />
             <Field label="登录账号" value={edit.username} readOnly />
             {edit.is_admin ? (
-              <Notice>管理员登录账号和密码由 env 配置。</Notice>
+              <Notice>管理员登录账号和密码由环境变量配置。</Notice>
             ) : (
               <>
                 <Toggle
@@ -1302,6 +1720,7 @@ export function Merchants(p: PageProps) {
     </>
   );
 }
+
 export function SMTPPage(p: PageProps) {
   const r = useLoad(
     () => api<{ data: SMTP; has_password: boolean }>("smtp"),
@@ -1313,15 +1732,22 @@ export function SMTPPage(p: PageProps) {
     [testEmail, setTestEmail] = useState(""),
     [testBusy, setTestBusy] = useState(false),
     [testError, setTestError] = useState("");
+
   useEffect(() => {
     if (r.data) {
       setForm({ ...r.data.data, password: "" });
       setClear(false);
     }
   }, [r.data]);
+
   const set = (v: Partial<SMTP>) => setForm((f) => (f ? { ...f, ...v } : f));
+
   return (
-    <Guard loading={r.loading && !form} error={r.error}>
+    <Guard
+      loading={r.loading && !form}
+      error={r.error}
+      fallback={<SkeletonTable rows={4} />}
+    >
       {form && (
         <form
           onSubmit={(e) => {
@@ -1335,14 +1761,14 @@ export function SMTPPage(p: PageProps) {
             title="SMTP 发送服务"
             description="全局邮件服务，仅管理员可配置。凭据保存于数据库，API 不回显密码。"
           >
-            <div className="max-w-3xl space-y-7">
+            <div className="max-w-3xl space-y-6">
               <Toggle
                 label="启用邮件发送"
                 description="关闭时保留通知队列，重新启用后继续发送仍有效的订阅。"
                 selected={form.enabled}
                 onChange={(v) => set({ enabled: v })}
               />
-              <div className="grid gap-5 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <Field
                   label="SMTP 主机"
                   value={form.host}
@@ -1410,8 +1836,8 @@ export function SMTPPage(p: PageProps) {
               </Notice>
               <div className="flex flex-wrap gap-3">
                 <Button type="submit" isPending={p.busy}>
+                  <Mail size={15} />
                   保存邮件服务
-                  <Mail size={16} />
                 </Button>
                 <Button
                   type="button"
@@ -1421,6 +1847,7 @@ export function SMTPPage(p: PageProps) {
                     setTestOpen(true);
                   }}
                 >
+                  <Send size={15} />
                   发送测试邮件
                 </Button>
               </div>

@@ -1,1 +1,32 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><meta name="theme-color" content="#17654c"/><title>ANE</title><link rel="icon" type="image/svg+xml" href="/assets/ane.svg"/></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#156d51" />
+    <title>ANE · 收款管理工作空间</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/ane.svg" />
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("ane-theme") || "system";
+          var dark =
+            mode === "dark" ||
+            (mode === "system" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var theme = dark ? "dark" : "light";
+          var root = document.documentElement;
+          root.classList.add(theme);
+          root.setAttribute("data-theme", theme);
+          root.style.colorScheme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", dark ? "#0d1412" : "#156d51");
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -7,6 +7,7 @@ import {
   Select,
   ListBox,
   Popover,
+  Separator,
 } from "@heroui/react";
 import { useState } from "react";
 import { CalendarDays, X } from "lucide-react";
@@ -93,6 +94,7 @@ export function DateTime({
     </div>
   );
 }
+
 export function MultiChoice({
   label,
   value,
@@ -170,8 +172,8 @@ export function TimeRange({
   };
   return (
     <div className="min-w-0">
-      <Label className="mb-1 block text-xs">{label}</Label>
-      <div className="flex items-center gap-1">
+      <Label className="mb-1.5 block text-xs">{label}</Label>
+      <div className="flex items-center gap-1.5">
         <Popover
           isOpen={open}
           onOpenChange={(next) => {
@@ -184,36 +186,41 @@ export function TimeRange({
         >
           <Button
             variant="secondary"
-            className="min-w-0 flex-1 justify-start px-3 font-normal"
+            className="min-w-0 flex-1 justify-start gap-2 px-3 font-normal"
             aria-label={label + "：" + summary}
           >
-            <CalendarDays size={15} className="shrink-0" />
+            <CalendarDays size={15} className="shrink-0 text-muted" />
             <span className="truncate text-xs tabular-nums">{summary}</span>
           </Button>
           <Popover.Content
             placement="bottom start"
             className="w-[min(620px,calc(100vw-2rem))]"
           >
-            <Popover.Dialog className="space-y-4 p-3">
-              <Popover.Heading>{label}</Popover.Heading>
+            <Popover.Dialog className="space-y-4 p-4">
+              <div>
+                <Popover.Heading className="text-sm font-semibold">
+                  {label}
+                </Popover.Heading>
+                <p className="mt-0.5 text-xs text-muted">
+                  使用浏览器当前时区，可精确到秒，支持单侧时间范围。
+                </p>
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <DateTime label="开始时间" value={from} onChange={setFrom} />
                 <DateTime label="结束时间" value={to} onChange={setTo} />
               </div>
-              <p className="text-xs text-muted">
-                使用浏览器当前时区，可精确到秒，支持单侧时间范围。
-              </p>
               {invalid && (
-                <p role="alert" className="text-xs text-danger">
+                <p role="alert" className="text-xs font-medium text-danger">
                   结束时间不能早于开始时间
                 </p>
               )}
+              <Separator />
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex gap-1">
+                <div className="flex gap-1.5">
                   {[
                     ["今天", 1],
-                    ["近7天", 7],
-                    ["近30天", 30],
+                    ["近 7 天", 7],
+                    ["近 30 天", 30],
                   ].map(([name, days]) => (
                     <Button
                       key={name}

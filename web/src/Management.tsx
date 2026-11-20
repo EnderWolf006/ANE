@@ -1,22 +1,30 @@
 import { useEffect, useState } from "react";
-import { Button, TextField, TextArea, Label } from "@heroui/react";
-import { Copy, Plus } from "lucide-react";
+import {
+  Button,
+  Chip,
+  Label,
+  TextArea,
+  TextField,
+  Tooltip,
+} from "@heroui/react";
+import { Copy, Plus, RotateCcw, Search } from "lucide-react";
 import { api, maskAppKey, scoped, time } from "./api";
 import {
-  Panel,
+  Choice,
   DataTable,
   Dialog,
   Field,
   Notice,
-  Toggle,
-  Choice,
   Pagination,
+  Panel,
+  SkeletonTable,
   Status,
-  Loading,
+  Toggle,
   useLoad,
 } from "./components";
 import { TimeRange, MultiChoice } from "./DateTime";
 import type { PageProps } from "./App";
+
 interface AppRecord {
   name: string;
   merchant_key: string;
@@ -24,6 +32,7 @@ interface AppRecord {
   payment_note: string;
   emails: { id: number; email: string }[];
 }
+
 export function Applications(p: PageProps) {
   const r = useLoad(
     () => api<{ data: AppRecord[] }>(scoped("apps", p.merchant)),
@@ -37,6 +46,7 @@ export function Applications(p: PageProps) {
       app: AppRecord;
       action: "disable" | "delete" | "rotate";
     }>();
+
   const copy = async (key: string, label = "密钥") => {
     try {
       await navigator.clipboard.writeText(key);
@@ -45,6 +55,7 @@ export function Applications(p: PageProps) {
       p.notify("复制失败，请重试");
     }
   };
+
   const act = () =>
     p.run(async () => {
       if (!confirm) return;
@@ -64,10 +75,11 @@ export function Applications(p: PageProps) {
       setConfirm(undefined);
       if (action === "rotate") await copy(result.merchant_key);
     }, "操作完成");
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <Panel
-        title="易支付接入"
+        title="易支付接入参数"
         description="各应用使用同一商户 ID 和独立密钥，共享收款设备与优惠池。"
       >
         <div className="grid gap-4 sm:grid-cols-2">
@@ -77,18 +89,24 @@ export function Applications(p: PageProps) {
           ].map((item) => (
             <div key={item.label} className="flex items-end gap-2">
               <Field label={item.label} value={item.value} readOnly />
-              <Button
-                variant="secondary"
-                isIconOnly
-                aria-label={"复制" + item.label}
-                onPress={() => copy(item.value, item.label)}
-              >
-                <Copy size={16} />
-              </Button>
+              <Tooltip delay={300}>
+                <Button
+                  variant="secondary"
+                  isIconOnly
+                  aria-label={"复制" + item.label}
+                  onPress={() => copy(item.value, item.label)}
+                >
+                  <Copy size={15} />
+                </Button>
+                <Tooltip.Content placement="top">
+                  复制{item.label}
+                </Tooltip.Content>
+              </Tooltip>
             </div>
           ))}
         </div>
       </Panel>
+
       <Panel
         title="应用管理"
         description="点击密钥复制完整内容；付款页文案随新订单保存。"
@@ -106,12 +124,18 @@ export function Applications(p: PageProps) {
           </Button>
         }
       >
-        {r.error && <Notice error>{r.error}</Notice>}
+        {r.error && (
+          <div className="mb-4">
+            <Notice error>{r.error}</Notice>
+          </div>
+        )}
         {r.loading ? (
-          <Loading />
+          <SkeletonTable rows={4} />
         ) : (
           <DataTable
             label="应用管理"
+            emptyTitle="暂无接入应用"
+            emptyDescription="点击右上角添加应用以生成独立的易支付密钥。"
             headers={[
               "应用名",
               "密钥",
@@ -121,40 +145,42 @@ export function Applications(p: PageProps) {
               "操作",
             ]}
             rows={(r.data?.data || []).map((app) => [
-              app.name,
+              <span className="font-semibold text-foreground">{app.name}</span>,
               <Button
                 size="sm"
-                variant="ghost"
-                className="h-auto p-0 font-mono text-xs"
+                variant="secondary"
+                className="h-7 gap-1.5 px-2.5 font-mono text-xs"
                 aria-label={"复制 " + app.name + " 密钥"}
                 onPress={() => copy(app.merchant_key)}
               >
                 {maskAppKey(app.merchant_key, app.name)}
-                <Copy size={13} />
+                <Copy size={12} />
               </Button>,
-              <div>
-                {app.emails.length
-                  ? app.emails.map((email) => (
-                      <Button
-                        key={email.id}
-                        size="sm"
-                        variant="ghost"
-                        className="block h-auto p-0 text-xs"
-                        onPress={() => p.navigate("subscriptions/" + email.id)}
-                      >
-                        {email.email}
-                      </Button>
-                    ))
-                  : "—"}
+              <div className="flex flex-wrap gap-1.5">
+                {app.emails.length ? (
+                  app.emails.map((email) => (
+                    <Button
+                      key={email.id}
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-xs text-accent-soft-foreground"
+                      onPress={() => p.navigate("subscriptions/" + email.id)}
+                    >
+                      {email.email}
+                    </Button>
+                  ))
+                ) : (
+                  <span className="text-muted">—</span>
+                )}
               </div>,
               <span
-                className="block max-w-48 truncate"
+                className="block max-w-48 truncate text-xs text-muted"
                 title={app.payment_note}
               >
                 {app.payment_note || "—"}
               </span>,
-              app.enabled ? "启用" : "禁用",
-              <div className="flex flex-wrap gap-2">
+              <Status value={app.enabled ? "enabled" : "disabled"} />,
+              <div className="flex flex-wrap gap-1.5">
                 <Button
                   size="sm"
                   variant="tertiary"
@@ -162,7 +188,6 @@ export function Applications(p: PageProps) {
                 >
                   轮换密钥
                 </Button>
-
                 <Button
                   size="sm"
                   variant="secondary"
@@ -199,6 +224,7 @@ export function Applications(p: PageProps) {
           />
         )}
       </Panel>
+
       <Dialog
         title="添加应用"
         open={create}
@@ -236,9 +262,16 @@ export function Applications(p: PageProps) {
           </>
         }
       >
-        <Field label="应用名" value={name} onChange={setName} />
+        <Field
+          label="应用名"
+          value={name}
+          onChange={setName}
+          placeholder="例如 my_shop"
+          hint="仅支持英文字母、数字和下划线"
+        />
         {error && <Notice error>{error}</Notice>}
       </Dialog>
+
       <Dialog
         title="编辑应用"
         open={!!edit}
@@ -269,6 +302,7 @@ export function Applications(p: PageProps) {
           <>
             <Field label="应用名" value={edit.name} readOnly />
             <TextField
+              className="w-full"
               value={edit.payment_note}
               onChange={(payment_note) => setEdit({ ...edit, payment_note })}
             >
@@ -281,6 +315,7 @@ export function Applications(p: PageProps) {
           </>
         )}
       </Dialog>
+
       <Dialog
         title={
           confirm?.action === "delete"
@@ -307,10 +342,10 @@ export function Applications(p: PageProps) {
           </>
         }
       >
-        <p>应用：{confirm?.app.name}</p>
-        <p className="text-sm text-muted">
+        <p className="text-sm font-medium">应用：{confirm?.app.name}</p>
+        <p className="text-sm leading-6 text-muted">
           {confirm?.action === "rotate"
-            ? "轮换后请更新应用端密钥。"
+            ? "轮换后请及时更新应用端密钥。"
             : confirm?.action === "delete"
               ? "删除后停止新接入，应用名保留在历史记录中，不能重新使用。"
               : "禁用后停止新订单和查询。"}
@@ -320,17 +355,20 @@ export function Applications(p: PageProps) {
     </div>
   );
 }
+
 interface Subscription {
   id: number;
   email: string;
   topics: string[];
   apps: string[];
 }
+
 interface SubscriptionData {
   data: Subscription[];
   available_topics: Record<string, string>;
   smtp_enabled: boolean;
 }
+
 interface MailRecord {
   id: number;
   subject: string;
@@ -341,6 +379,7 @@ interface MailRecord {
   last_error: string;
   created_at: string;
 }
+
 export function Subscriptions(p: PageProps) {
   const r = useLoad(
     () => api<SubscriptionData>(scoped("subscriptions", p.merchant)),
@@ -359,6 +398,7 @@ export function Subscriptions(p: PageProps) {
     [search, setSearch] = useState(""),
     [start, setStart] = useState(""),
     [end, setEnd] = useState("");
+
   useEffect(() => {
     const open = () => {
       const match = window.location.hash.match(/^#\/subscriptions\/(\d+)/);
@@ -371,11 +411,13 @@ export function Subscriptions(p: PageProps) {
     window.addEventListener("hashchange", open);
     return () => window.removeEventListener("hashchange", open);
   }, [r.data]);
+
   const close = () => {
     setEdit(undefined);
     if (window.location.hash.startsWith("#/subscriptions/"))
       p.navigate("subscriptions");
   };
+
   const mails = useLoad(() => {
     const params = new URLSearchParams({ page: String(page), q: search });
     if (status !== "all") params.set("status", status);
@@ -386,12 +428,14 @@ export function Subscriptions(p: PageProps) {
       scoped("mail?" + params, p.merchant),
     );
   }, [p.merchant, p.refresh, page, status, topic, search, start, end]);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {r.error && <Notice error>{r.error}</Notice>}
       {r.data && !r.data.smtp_enabled && (
         <Notice>邮件服务尚未启用。可先配置订阅，再由管理员启用 SMTP。</Notice>
       )}
+
       <Panel
         title="邮箱订阅"
         description="每个邮箱独立选择事件和应用。设备及未匹配通知属于商户级事件，不受应用选择限制。"
@@ -406,18 +450,38 @@ export function Subscriptions(p: PageProps) {
         }
       >
         {r.loading ? (
-          <Loading />
+          <SkeletonTable rows={3} />
         ) : (
           <DataTable
             label="邮箱订阅"
-            headers={["接收邮箱", "事件", "应用", "操作"]}
+            emptyTitle="暂无订阅邮箱"
+            emptyDescription="添加接收邮箱后，系统会在关键收款事件发生时自动推送邮件提醒。"
+            headers={["接收邮箱", "订阅事件", "关联应用", "操作"]}
             rows={(r.data?.data || []).map((s) => [
-              s.email,
-              s.topics
-                .map((t) => r.data?.available_topics[t] || t)
-                .join("、") || "未订阅",
-              s.apps.join("、") || "无应用",
-              <div className="flex gap-2">
+              <span className="font-medium text-foreground">{s.email}</span>,
+              <div className="flex flex-wrap gap-1.5">
+                {s.topics.length ? (
+                  s.topics.map((t) => (
+                    <Chip key={t} size="sm" variant="soft" color="accent">
+                      {r.data?.available_topics[t] || t}
+                    </Chip>
+                  ))
+                ) : (
+                  <span className="text-xs text-muted">未订阅</span>
+                )}
+              </div>,
+              <div className="flex flex-wrap gap-1.5">
+                {s.apps.length ? (
+                  s.apps.map((a) => (
+                    <Chip key={a} size="sm" variant="soft">
+                      {a}
+                    </Chip>
+                  ))
+                ) : (
+                  <span className="text-xs text-muted">无应用</span>
+                )}
+              </div>,
+              <div className="flex gap-1.5">
                 <Button
                   size="sm"
                   variant="secondary"
@@ -437,6 +501,7 @@ export function Subscriptions(p: PageProps) {
           />
         )}
       </Panel>
+
       <Dialog
         title={edit?.id ? "编辑邮箱订阅" : "添加邮箱订阅"}
         open={!!edit}
@@ -471,6 +536,7 @@ export function Subscriptions(p: PageProps) {
               type="email"
               value={edit.email}
               onChange={(email) => setEdit({ ...edit, email })}
+              placeholder="ops@example.com"
             />
             <MultiChoice
               label="订阅的应用"
@@ -481,7 +547,7 @@ export function Subscriptions(p: PageProps) {
                 label: app.name,
               }))}
             />
-            <div className="space-y-4">
+            <div className="space-y-2.5">
               {Object.entries(r.data?.available_topics || {}).map(
                 ([key, label]) => (
                   <Toggle
@@ -503,6 +569,7 @@ export function Subscriptions(p: PageProps) {
           </>
         )}
       </Dialog>
+
       <Dialog
         title="删除邮箱订阅？"
         open={!!deleting}
@@ -529,73 +596,18 @@ export function Subscriptions(p: PageProps) {
           </>
         }
       >
-        <p>{deleting?.email}</p>
-        <p>该邮箱尚未发送的邮件将取消，发送历史保留。</p>
+        <p className="font-medium">{deleting?.email}</p>
+        <p className="text-sm text-muted">
+          该邮箱尚未发送的邮件将取消，历史发送记录保留。
+        </p>
       </Dialog>
+
       <Panel
         title="邮件发送记录"
         description="按创建时间筛选，时间使用当前浏览器时区。"
-      >
-        <div className="mb-5 grid items-end gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <Choice
-            label="状态"
-            value={status}
-            onChange={(v) => {
-              setStatus(v);
-              setPage(1);
-            }}
-            options={[
-              { id: "all", label: "全部状态" },
-              { id: "pending", label: "待发送" },
-              { id: "retrying", label: "重试中" },
-              { id: "sent", label: "已发送" },
-              { id: "failed", label: "失败" },
-              { id: "cancelled", label: "已取消" },
-            ]}
-          />
-          <Choice
-            label="通知类型"
-            value={topic}
-            onChange={(v) => {
-              setTopic(v);
-              setPage(1);
-            }}
-            options={[
-              { id: "all", label: "全部类型" },
-              ...Object.entries(r.data?.available_topics || {}).map(
-                ([id, label]) => ({ id, label }),
-              ),
-            ]}
-          />
-          <form
-            className="flex items-end gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              setSearch(query);
-              setPage(1);
-            }}
-          >
-            <Field
-              label="搜索"
-              value={query}
-              onChange={setQuery}
-              placeholder="主题或邮箱"
-            />
-            <Button type="submit" variant="secondary">
-              搜索
-            </Button>
-          </form>
-          <TimeRange
-            label="创建时间"
-            start={start}
-            end={end}
-            onChange={(from, to) => {
-              setStart(from);
-              setEnd(to);
-              setPage(1);
-            }}
-          />
+        action={
           <Button
+            size="sm"
             variant="tertiary"
             onPress={() => {
               setStart("");
@@ -607,12 +619,86 @@ export function Subscriptions(p: PageProps) {
               setPage(1);
             }}
           >
+            <RotateCcw size={14} />
             重置筛选
           </Button>
+        }
+      >
+        <div className="filter-bar">
+          <div className="grid items-end gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <Choice
+              label="状态"
+              value={status}
+              onChange={(v) => {
+                setStatus(v);
+                setPage(1);
+              }}
+              options={[
+                { id: "all", label: "全部状态" },
+                { id: "pending", label: "待发送" },
+                { id: "retrying", label: "重试中" },
+                { id: "sent", label: "已发送" },
+                { id: "failed", label: "失败" },
+                { id: "cancelled", label: "已取消" },
+              ]}
+            />
+            <Choice
+              label="通知类型"
+              value={topic}
+              onChange={(v) => {
+                setTopic(v);
+                setPage(1);
+              }}
+              options={[
+                { id: "all", label: "全部类型" },
+                ...Object.entries(r.data?.available_topics || {}).map(
+                  ([id, label]) => ({ id, label }),
+                ),
+              ]}
+            />
+            <form
+              className="flex items-end gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setSearch(query);
+                setPage(1);
+              }}
+            >
+              <Field
+                label="搜索"
+                value={query}
+                onChange={setQuery}
+                placeholder="主题或邮箱"
+              />
+              <Button
+                type="submit"
+                isIconOnly
+                variant="secondary"
+                aria-label="搜索邮件"
+              >
+                <Search size={16} />
+              </Button>
+            </form>
+            <TimeRange
+              label="创建时间"
+              start={start}
+              end={end}
+              onChange={(from, to) => {
+                setStart(from);
+                setEnd(to);
+                setPage(1);
+              }}
+            />
+          </div>
         </div>
-        {mails.error && <Notice error>{mails.error}</Notice>}
+
+        {mails.error && (
+          <div className="mb-4">
+            <Notice error>{mails.error}</Notice>
+          </div>
+        )}
         {mails.loading ? (
-          <Loading />
+          <SkeletonTable rows={5} />
         ) : (
           <DataTable
             label="邮件记录"
@@ -626,18 +712,20 @@ export function Subscriptions(p: PageProps) {
             ]}
             rows={(mails.data?.data || []).map((m) => [
               <div>
-                {m.subject}
+                <div className="font-medium text-foreground">{m.subject}</div>
                 {m.last_error && (
-                  <p className="mt-1 max-w-sm break-all text-xs text-muted">
+                  <p className="mt-1 max-w-sm break-all text-xs text-danger">
                     {m.last_error}
                   </p>
                 )}
               </div>,
-              m.merchant_username,
+              <span className="font-mono text-xs">{m.merchant_username}</span>,
               m.recipient,
               <Status value={m.status} />,
-              m.attempts,
-              time(m.created_at),
+              <span className="tabular-nums">{m.attempts}</span>,
+              <span className="text-xs text-muted tabular-nums">
+                {time(m.created_at)}
+              </span>,
             ])}
           />
         )}
