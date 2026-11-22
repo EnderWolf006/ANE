@@ -94,7 +94,7 @@
       transparent 70%
     );
   --ane-sidebar-bg: color-mix(in oklab, var(--surface) 92%, var(--background) 8%);
-  --ane-topbar-bg: color-mix(in oklab, var(--surface) 72%, transparent);
+  --ane-topbar-bg: color-mix(in oklab, var(--surface) 64%, transparent);
   --ane-brand-glow: oklch(0.52 0.12 162 / 0.24);
   --ane-card-border-hover: oklch(0.82 0.035 160);
   --ane-qr-bg: #ffffff;
@@ -209,7 +209,7 @@
       transparent 72%
     );
   --ane-sidebar-bg: oklch(0.165 0.013 164);
-  --ane-topbar-bg: color-mix(in oklab, var(--surface) 72%, transparent);
+  --ane-topbar-bg: color-mix(in oklab, var(--surface) 68%, transparent);
   --ane-brand-glow: oklch(0.69 0.13 162 / 0.28);
   --ane-card-border-hover: oklch(0.4 0.04 162);
   --ane-qr-bg: #ffffff;
@@ -442,21 +442,16 @@ a:focus-visible {
   opacity: 0.9;
 }
 
-.brand-mark {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
-  box-shadow: 0 6px 16px -4px var(--ane-brand-glow);
-  overflow: hidden;
+.brand-logo {
+  display: block;
+  width: 112px;
+  height: auto;
+  object-fit: contain;
   flex-shrink: 0;
 }
 
-.brand img {
-  width: 36px;
-  height: 36px;
-  display: block;
+.receipt-brand-logo {
+  width: 128px;
 }
 
 .sidebar .brand {
@@ -592,9 +587,7 @@ a:focus-visible {
   z-index: 20;
   height: 64px;
   border-bottom: 1px solid var(--border);
-  background: var(--ane-topbar-bg);
-  backdrop-filter: blur(22px) saturate(1.4);
-  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  background: var(--surface);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -602,6 +595,14 @@ a:focus-visible {
   transition:
     background-color 0.25s ease,
     border-color 0.25s ease;
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .topbar {
+    background: var(--ane-topbar-bg);
+    -webkit-backdrop-filter: blur(26px) saturate(1.35);
+    backdrop-filter: blur(26px) saturate(1.35);
+  }
 }
 
 .main-content {
@@ -995,6 +996,8 @@ a:focus-visible {
 /* Page Footer */
 .page-footer {
   display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   justify-content: space-between;
   align-items: center;
   font-size: 11px;
@@ -1004,8 +1007,8 @@ a:focus-visible {
 }
 
 .page-footer > span:first-child {
-  font-weight: 700;
-  letter-spacing: 0.16em;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 /* ==========================================================================
@@ -1267,6 +1270,53 @@ a:focus-visible {
   min-width: 0;
 }
 
+.order-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.order-summary-pill {
+  --summary-marker: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px color-mix(in oklab, var(--foreground) 8%, transparent);
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.order-summary-pill::before {
+  content: "";
+  width: 3px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--summary-marker);
+}
+
+.order-summary-pill[data-tone="accent"] { --summary-marker: var(--accent); }
+.order-summary-pill[data-tone="success"] { --summary-marker: var(--success); }
+.order-summary-pill[data-tone="warning"] { --summary-marker: var(--warning); }
+.order-summary-pill dt {
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+}
+.order-summary-pill dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground);
+}
+
 /* ==========================================================================
    Login Experience
    ========================================================================== */
@@ -1353,7 +1403,7 @@ a:focus-visible {
   font-weight: 500;
   line-height: 1.38;
   letter-spacing: -0.02em;
-  margin: 16px 0 36px;
+  margin: 16px 0 12px;
 }
 
 .visual-receipt {
@@ -1466,11 +1516,8 @@ a:focus-visible {
   font-size: 20px;
 }
 
-.pay-topbar .brand-mark,
-.pay-topbar .brand img {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+.pay-topbar .brand-logo {
+  width: 100px;
 }
 
 .pay-card {

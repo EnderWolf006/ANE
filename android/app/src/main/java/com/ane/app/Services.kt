@@ -93,7 +93,7 @@ class KeepAliveService : Service() {
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel("ane-monitor", "ANE 后台监听", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val notification = NotificationCompat.Builder(this, "ane-monitor").setSmallIcon(R.drawable.ic_ane)
+        val notification = NotificationCompat.Builder(this, "ane-monitor").setSmallIcon(R.drawable.ane_notification)
             .setContentTitle("ANE 正在监听支付宝与微信收款").setContentText("点击查看连接、待上报通知和运行状态")
             .setContentIntent(open).setOngoing(true).setCategory(NotificationCompat.CATEGORY_SERVICE).build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(1, notification)

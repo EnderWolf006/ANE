@@ -249,12 +249,20 @@ func (a *App) adminOrders(w http.ResponseWriter, r *http.Request, id int64) {
 	}
 
 	var summary struct {
-		Orders   int64 `json:"orders"`
-		Paid     int64 `json:"paid"`
-		Revenue  int64 `json:"revenue_cents"`
-		Discount int64 `json:"discount_cents"`
+		Orders        int64 `json:"orders"`
+		Paid          int64 `json:"paid"`
+		Revenue       int64 `json:"revenue_cents"`
+		AlipayRevenue int64 `json:"alipay_revenue_cents"`
+		WechatRevenue int64 `json:"wxpay_revenue_cents"`
+		Discount      int64 `json:"discount_cents"`
 	}
-	err = a.db.QueryRow(r.Context(), "SELECT count(*),count(*) FILTER (WHERE status='paid'),coalesce(sum(pay_amount) FILTER (WHERE status='paid'),0),coalesce(sum(discount) FILTER (WHERE status='paid'),0) FROM orders"+filter, args...).Scan(&summary.Orders, &summary.Paid, &summary.Revenue, &summary.Discount)
+	err = a.db.QueryRow(r.Context(), `SELECT count(*),count(*) FILTER (WHERE status='paid'),
+ coalesce(sum(pay_amount) FILTER (WHERE status='paid'),0),
+ coalesce(sum(pay_amount) FILTER (WHERE status='paid' AND payment_type='alipay'),0),
+ coalesce(sum(pay_amount) FILTER (WHERE status='paid' AND payment_type='wxpay'),0),
+ coalesce(sum(discount) FILTER (WHERE status='paid'),0) FROM orders`+filter, args...).Scan(
+		&summary.Orders, &summary.Paid, &summary.Revenue, &summary.AlipayRevenue, &summary.WechatRevenue, &summary.Discount,
+	)
 	if err != nil {
 		a.internal(w, err)
 		return

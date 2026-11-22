@@ -45,6 +45,8 @@ import {
 } from "./pages";
 import { Applications, Subscriptions } from "./Management";
 import { useThemeMode } from "./theme";
+import { BRAND_FULL_NAME, BRAND_LABEL } from "./brand";
+import { BrandLogo } from "./BrandLogo";
 
 export type PageProps = {
   navigate: (view: string) => void;
@@ -287,11 +289,8 @@ export function App() {
         />
       )}
       <aside className={"sidebar " + (mobile ? "is-open" : "")}>
-        <a href="/admin" className="brand">
-          <span className="brand-mark">
-            <img src="/assets/ane.svg" alt="" />
-          </span>
-          <span>ANE</span>
+        <a href="/admin" className="brand" title={BRAND_FULL_NAME} aria-label={BRAND_LABEL}>
+          <BrandLogo />
           <span className="version-tag">v2.4</span>
         </a>
 
@@ -473,7 +472,7 @@ export function App() {
           </div>
 
           <footer className="page-footer">
-            <span>ANE</span>
+            <span>{BRAND_LABEL}</span>
             <span>清晰连接每一笔收款 · v2.4</span>
           </footer>
         </main>
@@ -500,11 +499,8 @@ function Login({
     <div className="login-layout">
       <div className="login-side">
         <div className="flex items-center justify-between">
-          <a className="brand" href="/admin">
-            <span className="brand-mark">
-              <img src="/assets/ane.svg" alt="" />
-            </span>
-            <span>ANE</span>
+          <a className="brand" href="/admin" title={BRAND_FULL_NAME} aria-label={BRAND_LABEL}>
+            <BrandLogo />
             <span className="version-tag">v2.4</span>
           </a>
           <ThemeToggleButton resolved={theme} onToggle={onToggleTheme} />
@@ -577,7 +573,7 @@ function Login({
           </p>
         </div>
 
-        <p className="text-xs text-muted">ANE · 收款管理工作空间</p>
+        <p className="text-xs leading-5 text-muted">{BRAND_FULL_NAME}</p>
       </div>
 
       <div className="login-visual">
@@ -596,6 +592,7 @@ function Login({
             <br />
             从容掌控。
           </h2>
+          <p className="mb-7 text-sm leading-6 text-white/75">{BRAND_FULL_NAME}</p>
 
           <Card className="visual-receipt">
             <Card.Content>
@@ -614,9 +611,7 @@ function Login({
                   <div className="text-[11px] tracking-widest text-white/60">
                     UNIFIED LEDGER
                   </div>
-                  <span className="mt-1 block text-4xl font-semibold tracking-tight text-white">
-                    ANE
-                  </span>
+                  <BrandLogo className="receipt-brand-logo mt-2" />
                 </div>
                 <span className="text-right text-xs leading-6 text-white/75">
                   独立商户 · 实时设备

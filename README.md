@@ -1,6 +1,16 @@
-# ANE
+# ANE — Automated Notification-Driven Epay
 
-ANE 2.4.3 是 Go + PostgreSQL 收款服务端和 Jetpack Compose Android 通知监听客户端。Web 管理面板与收银台使用 React、Tailwind CSS v4、Vite 和 HeroUI v3。
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="web/public/assets/ane-logo-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="web/public/assets/ane-logo-light.png">
+    <img src="web/public/assets/ane-logo-light.png" alt="ANE — Automated Notification-Driven Epay" width="320">
+  </picture>
+</p>
+
+ANE 全称为 **Automated Notification-Driven Epay**，通过手机收款通知自动匹配易支付订单、确认收款并发送回调。
+
+ANE 2.4.4 包含 Go + PostgreSQL 收款服务端和 Jetpack Compose Android 通知监听客户端。Web 管理面板与收银台使用 React、Tailwind CSS v4、Vite 和 HeroUI v3。
 
 识别支付宝个人/商家收款及微信收款助手通知。支持经典易支付 MD5 协议；`/submit.php`、`/mapi.php`、`/api.php` 都是 **Go HTTP 路由**，不运行 PHP。
 
@@ -224,3 +234,9 @@ schema 6 自动迁移到 schema 7，只拆分池元数据及实付金额唯一�
 - 邮箱新增独立订阅项 `device_offline_reminder`（离线持续通知），位于设备离线下方。首次离线告警后每小时最多提醒一次，恢复心跳或重置设备后取消旧提醒；重启和多实例不会重置提醒间隔。已有订阅不会自动启用此项。
 - 收银台宽度 500px，金额居中、右侧复制，移除扫码动效与主题切换，始终跟随系统外观。管理端优化 appbar 模糊、表格圆角与邮件列布局。
 - 数据库保持 schema 7，无需迁移；商户、密钥、订单、会话、设备、应用文案及旧订阅保留。Android 无需更新。
+
+## 2.4.4 品牌与交易汇总
+
+- 网页、浏览器标签页和 Android 2.4.2 使用新 ANE 标识；Android 底部导航统一使用 24dp 图标。
+- 交易筛选汇总新增支付宝与微信的实收小计，金额仍只统计筛选范围内的已支付订单。创建时间支持今天、近 24 小时、本周、近 7 天、本月和近 30 天。
+- 数据库保持 schema 7，旧 API 客户端可继续使用原字段；Android 沿用现有包名和签名。

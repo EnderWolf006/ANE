@@ -478,6 +478,40 @@ const initialOrderFilters = {
   sort: "newest",
 };
 
+type OrderSummary = {
+  orders: number;
+  paid: number;
+  revenue_cents: number;
+  alipay_revenue_cents?: number;
+  wxpay_revenue_cents?: number;
+  discount_cents: number;
+};
+
+function OrderSummaryPills({ summary, loading }: { summary?: OrderSummary; loading: boolean }) {
+  const currency = (cents?: number) => cents === undefined ? undefined : money(cents);
+  const metrics = [
+    { label: "订单总数", value: summary?.orders },
+    { label: "已支付订单", value: summary?.paid, tone: "success" },
+    { label: "实收总金额", value: currency(summary?.revenue_cents), tone: "accent" },
+    { label: "支付宝实收", channel: "alipay", value: currency(summary?.alipay_revenue_cents), tone: "accent" },
+    { label: "微信实收", channel: "wxpay", value: currency(summary?.wxpay_revenue_cents), tone: "success" },
+    { label: "优惠总金额", value: currency(summary?.discount_cents), tone: "warning" },
+  ] as const;
+
+  return (
+    <dl className="order-summary" aria-label="筛选范围汇总（金额仅统计已支付订单）" aria-busy={loading}>
+      {metrics.map((metric) => (
+        <div className="order-summary-pill" key={metric.label} data-tone={"tone" in metric ? metric.tone : undefined}>
+          <dt>
+            {"channel" in metric ? <PaymentChannel type={metric.channel} label={metric.label} /> : metric.label}
+          </dt>
+          <dd>{loading ? "—" : metric.value ?? "—"}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 export function Orders(p: PageProps) {
   const [page, setPage] = useState(1),
     [query, setQuery] = useState(""),
@@ -507,7 +541,7 @@ export function Orders(p: PageProps) {
 
   const r = useLoad(
     () =>
-      api<{ data: Order[]; has_more: boolean; summary: { orders: number; paid: number; revenue_cents: number; discount_cents: number } }>(
+      api<{ data: Order[]; has_more: boolean; summary: OrderSummary }>(
         scoped("orders?" + paramsForOrders(), p.merchant),
       ),
     [p.refresh, p.merchant, page, search, filters],
@@ -663,22 +697,7 @@ export function Orders(p: PageProps) {
           </div>
         </div>
 
-        <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4" aria-label="筛选范围汇总" aria-busy={r.loading}>
-          {[
-            ["订单总数", r.data?.summary.orders],
-            ["已支付订单", r.data?.summary.paid],
-            ["实收金额", r.data ? money(r.data.summary.revenue_cents) : undefined],
-            ["优惠金额", r.data ? money(r.data.summary.discount_cents) : undefined],
-          ].map(([label, value]) => (
-            <Card key={label} className="border border-border bg-surface-secondary p-4 shadow-none">
-              <Card.Content>
-                <p className="text-xs text-muted">{label}<span className="ml-2 text-[10px]">筛选范围内</span></p>
-                <p className="mt-2 text-xl font-semibold tabular-nums">{r.loading ? "—" : value ?? "—"}</p>
-                {(label === "实收金额" || label === "优惠金额") && <p className="mt-1 text-[10px] text-muted">仅统计已支付订单</p>}
-              </Card.Content>
-            </Card>
-          ))}
-        </div>
+        <OrderSummaryPills summary={r.data?.summary} loading={r.loading} />
 
         {apps.error && (
           <div className="mb-4">

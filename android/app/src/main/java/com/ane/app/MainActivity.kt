@@ -17,6 +17,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -29,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -114,17 +116,24 @@ private fun openSetting(context: Context, intent: Intent) {
         topBar = {
             Column(Modifier.statusBarsPadding().padding(horizontal = 24.dp, vertical = 18.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(42.dp).background(Green, RoundedCornerShape(13.dp)), contentAlignment = Alignment.Center) { Text("A·", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold) }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) { Text("ANE", fontSize = 23.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp); Text("收款设备", fontSize = 10.sp, color = Muted) }
+                    Column(Modifier.weight(1f)) {
+                        Image(painterResource(R.drawable.ane_wordmark), contentDescription = "ANE", modifier = Modifier.size(width = 96.dp, height = 37.dp))
+                        Text("收款设备", fontSize = 10.sp, color = Muted)
+                    }
                     BadgeLabel(if (snapshot.config.enabled && foreground && access) "监听已启用" else "监听未就绪", snapshot.config.enabled && foreground && access)
                 }
             }
         },
         bottomBar = {
             NavigationBar(containerColor = Color.White, tonalElevation = 0.dp) {
-                listOf("总览" to "◉", "配置" to "⚙", "通知" to "▤", "状态" to "◷").forEachIndexed { index, (title, symbol) ->
-                    NavigationBarItem(selected = tab == index, onClick = { tab = index }, icon = { Text(symbol, fontSize = 21.sp) }, label = { Text(title, fontSize = 11.sp) }, colors = NavigationBarItemDefaults.colors(indicatorColor = Pale, selectedIconColor = Green, selectedTextColor = Green))
+                listOf("总览" to R.drawable.ic_nav_overview, "配置" to R.drawable.ic_nav_settings, "通知" to R.drawable.ic_nav_notices, "状态" to R.drawable.ic_nav_status).forEachIndexed { index, (title, iconRes) ->
+                    NavigationBarItem(
+                        selected = tab == index,
+                        onClick = { tab = index },
+                        icon = { Icon(painterResource(iconRes), contentDescription = null, modifier = Modifier.size(24.dp)) },
+                        label = { Text(title, fontSize = 11.sp) },
+                        colors = NavigationBarItemDefaults.colors(indicatorColor = Pale, selectedIconColor = Green, selectedTextColor = Green),
+                    )
                 }
             }
         }

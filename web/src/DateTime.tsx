@@ -11,6 +11,7 @@ import {
 } from "@heroui/react";
 import { useState } from "react";
 import { CalendarDays, X } from "lucide-react";
+import { presetTimeRange, timePresets } from "./timePresets";
 import {
   getLocalTimeZone,
   now,
@@ -161,15 +162,6 @@ export function TimeRange({
       : "不限";
   const summary =
     start || end ? format(start) + " — " + format(end) : "全部时间";
-  const preset = (days: number) => {
-    const endDate = new Date();
-    endDate.setHours(23, 59, 59, 999);
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days + 1);
-    startDate.setHours(0, 0, 0, 0);
-    onChange(startDate.toISOString(), endDate.toISOString());
-    setOpen(false);
-  };
   return (
     <div className="min-w-0">
       <Label className="mb-1.5 block text-xs">{label}</Label>
@@ -216,19 +208,18 @@ export function TimeRange({
               )}
               <Separator />
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex gap-1.5">
-                  {[
-                    ["今天", 1],
-                    ["近 7 天", 7],
-                    ["近 30 天", 30],
-                  ].map(([name, days]) => (
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="预设时间范围">
+                  {timePresets.map(({ id, label }) => (
                     <Button
-                      key={name}
+                      key={id}
                       size="sm"
                       variant="tertiary"
-                      onPress={() => preset(Number(days))}
+                      onPress={() => {
+                        onChange(...presetTimeRange(id));
+                        setOpen(false);
+                      }}
                     >
-                      {name}
+                      {label}
                     </Button>
                   ))}
                 </div>

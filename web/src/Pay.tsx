@@ -12,6 +12,8 @@ import { PaymentChannel } from "./PaymentChannel";
 import { api, money } from "./api";
 import { Loading, Notice } from "./components";
 import { useSystemTheme } from "./theme";
+import { BRAND_FULL_NAME, BRAND_LABEL } from "./brand";
+import { BrandLogo } from "./BrandLogo";
 
 interface Payment {
   payment_type: "alipay" | "wxpay";
@@ -98,11 +100,8 @@ export function Pay() {
   return (
     <div className="pay-layout">
       <div className="pay-topbar">
-        <a href="/" className="brand">
-          <span className="brand-mark">
-            <img src="/assets/ane.svg" alt="" />
-          </span>
-          <span>ANE</span>
+        <a href="/" className="brand" title={BRAND_FULL_NAME} aria-label={BRAND_LABEL}>
+          <BrandLogo />
         </a>
       </div>
 
