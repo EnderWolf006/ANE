@@ -140,7 +140,6 @@ export function Applications(p: PageProps) {
               "应用名",
               "密钥",
               "通知邮箱",
-              "付款页文案",
               "状态",
               "操作",
             ]}
@@ -173,12 +172,6 @@ export function Applications(p: PageProps) {
                   <span className="text-muted">—</span>
                 )}
               </div>,
-              <span
-                className="block max-w-48 truncate text-xs text-muted"
-                title={app.payment_note}
-              >
-                {app.payment_note || "—"}
-              </span>,
               <Status value={app.enabled ? "enabled" : "disabled"} />,
               <div className="flex flex-wrap gap-1.5">
                 <Button
@@ -548,11 +541,13 @@ export function Subscriptions(p: PageProps) {
               }))}
             />
             <div className="space-y-2.5">
-              {Object.entries(r.data?.available_topics || {}).map(
-                ([key, label]) => (
+              {["payment_received", "payment_unmatched", "callback_failed", "device_offline", "device_offline_reminder", "device_online", "low_battery"]
+                .filter((key) => r.data?.available_topics[key]).map(
+                (key) => (
                   <Toggle
                     key={key}
-                    label={label}
+                    label={r.data!.available_topics[key]}
+                    description={key === "device_offline_reminder" ? "离线期间每小时通知一次，恢复心跳后停止。" : undefined}
                     selected={edit.topics.includes(key)}
                     onChange={(v) =>
                       setEdit({
@@ -702,6 +697,7 @@ export function Subscriptions(p: PageProps) {
         ) : (
           <DataTable
             label="邮件记录"
+            className="mail-history-table"
             headers={[
               "通知",
               "商户账号",

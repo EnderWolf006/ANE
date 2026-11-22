@@ -179,23 +179,23 @@ func (a *App) adminOrders(w http.ResponseWriter, r *http.Request, id int64) {
 	case "amount_asc":
 		ordering = "amount ASC,created_at DESC,trade_no DESC"
 	}
-	query := "SELECT " + orderColumns + ` FROM orders WHERE ($1::bigint=0 OR merchant_id=$1)
+	filter := ` WHERE ($1::bigint=0 OR merchant_id=$1)
  AND ($2='' OR out_trade_no ILIKE '%'||$2||'%' OR trade_no ILIKE '%'||$2||'%' OR app_id ILIKE '%'||$2||'%' OR name ILIKE '%'||$2||'%')
- AND ($4='' OR CASE WHEN status='pending' AND expires_at<=now() THEN 'expired' ELSE status END=$4)
- AND ($5='' OR callback_status=$5) AND (NOT $6::boolean OR app_id=$7)
- AND ($8='' OR ($8='none' AND discount=0) OR ($8='discounted' AND discount>0))
- AND ($9='' OR ($9='today' AND created_at>=date_trunc('day',now())) OR ($9='7d' AND created_at>=now()-interval '7 days') OR ($9='30d' AND created_at>=now()-interval '30 days') OR ($9='90d' AND created_at>=now()-interval '90 days'))
- AND ($10::timestamptz IS NULL OR created_at>=$10) AND ($11::timestamptz IS NULL OR created_at<=$11)
- ORDER BY ` + ordering
-	args := []any{id, q, offset, status, callback, v.Has("app_id"), v.Get("app_id"), discount, period, start, end}
+ AND ($3='' OR CASE WHEN status='pending' AND expires_at<=now() THEN 'expired' ELSE status END=$3)
+ AND ($4='' OR callback_status=$4) AND (NOT $5::boolean OR app_id=$6)
+ AND ($7='' OR ($7='none' AND discount=0) OR ($7='discounted' AND discount>0))
+ AND ($8='' OR ($8='today' AND created_at>=date_trunc('day',now())) OR ($8='7d' AND created_at>=now()-interval '7 days') OR ($8='30d' AND created_at>=now()-interval '30 days') OR ($8='90d' AND created_at>=now()-interval '90 days'))
+ AND ($9::timestamptz IS NULL OR created_at>=$9) AND ($10::timestamptz IS NULL OR created_at<=$10)`
+	args := []any{id, q, status, callback, v.Has("app_id"), v.Get("app_id"), discount, period, start, end}
+	query := "SELECT " + orderColumns + " FROM orders" + filter + " ORDER BY " + ordering
 	exporting := v.Get("export") == "csv"
 	// Keep parameter positions identical between paginated listing and complete export.
 	if exporting {
-		query += " LIMIT ALL OFFSET ($3::integer * 0)"
+		query += " LIMIT ALL OFFSET ($11::integer * 0)"
 	} else {
-		query += " LIMIT 31 OFFSET $3"
+		query += " LIMIT 31 OFFSET $11"
 	}
-	rows, err := a.db.Query(r.Context(), query, args...)
+	rows, err := a.db.Query(r.Context(), query, append(args, offset)...)
 
 	if err != nil {
 		a.internal(w, err)
@@ -248,11 +248,23 @@ func (a *App) adminOrders(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 
+	var summary struct {
+		Orders   int64 `json:"orders"`
+		Paid     int64 `json:"paid"`
+		Revenue  int64 `json:"revenue_cents"`
+		Discount int64 `json:"discount_cents"`
+	}
+	err = a.db.QueryRow(r.Context(), "SELECT count(*),count(*) FILTER (WHERE status='paid'),coalesce(sum(pay_amount) FILTER (WHERE status='paid'),0),coalesce(sum(discount) FILTER (WHERE status='paid'),0) FROM orders"+filter, args...).Scan(&summary.Orders, &summary.Paid, &summary.Revenue, &summary.Discount)
+	if err != nil {
+		a.internal(w, err)
+		return
+	}
+
 	more := len(list) > 30
 	if more {
 		list = list[:30]
 	}
-	respond(w, 200, map[string]any{"code": 1, "data": list, "page": p, "has_more": more})
+	respond(w, 200, map[string]any{"code": 1, "data": list, "page": p, "has_more": more, "summary": summary})
 }
 func (a *App) mailHistory(w http.ResponseWriter, r *http.Request, id int64) {
 	p, offset := page(r)

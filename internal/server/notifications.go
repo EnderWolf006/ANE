@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-var notificationTopics = map[string]string{"payment_received": "收款成功", "payment_unmatched": "收款未匹配", "callback_failed": "回调失败", "device_offline": "设备离线", "device_online": "设备恢复", "low_battery": "设备低电量"}
+var notificationTopics = map[string]string{"payment_received": "收款成功", "payment_unmatched": "收款未匹配", "callback_failed": "回调失败", "device_offline": "设备离线", "device_offline_reminder": "离线持续通知", "device_online": "设备恢复", "low_battery": "设备低电量"}
 
 func queueNotification(ctx context.Context, tx pgx.Tx, merchant int64, topic, key, title, message string) error {
 	var app any
@@ -80,6 +80,8 @@ func queueNotification(ctx context.Context, tx pgx.Tx, merchant int64, topic, ke
 			subject = device + " 恢复心跳，" + label + " 在线"
 		case "device_offline":
 			subject = device + " 心跳中断，请检查设备"
+		case "device_offline_reminder":
+			subject = device + " 仍然离线，请检查设备"
 		case "low_battery":
 			subject = fmt.Sprintf("%s 电量仅剩 %d%%，请充电", device, battery)
 		case "payment_unmatched":
@@ -88,6 +90,9 @@ func queueNotification(ctx context.Context, tx pgx.Tx, merchant int64, topic, ke
 		details += fmt.Sprintf("设备名称: %s\n设备型号: %s\n客户端版本: %s\n网络: %s\nWi-Fi 名称: %s\n电量: %d%%\n充电中: %t\n通知监听: %t\n后台服务: %t\n待上传通知: %d\n", device, model, version, network, wifi, battery, charging, listener, service, pending)
 		if last != nil {
 			details += "最近心跳: " + last.Format(time.RFC3339) + "\n"
+			if topic == "device_offline_reminder" {
+				details += fmt.Sprintf("心跳中断时长: %d 分钟\n提醒频率: 每小时一次\n", max(0, int(time.Since(*last).Minutes())))
+			}
 		}
 		if strings.HasPrefix(key, "unmatched:") {
 			var paymentType, raw, reason, notificationID string
@@ -390,12 +395,16 @@ func (a *App) mailOnce(ctx context.Context) bool {
 		return false
 	}
 	var allowed bool
-	err = a.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM mail_queue q JOIN merchants m ON m.id=q.recipient_id JOIN notification_events e ON e.id=q.event_id JOIN notification_subscriptions s ON s.id=q.subscription_id WHERE q.id=$1 AND m.enabled AND s.merchant_id=m.id AND m.id=e.merchant_id AND s.email=q.recipient AND e.topic=ANY(s.topics) AND (e.app_id IS NULL OR e.app_id=ANY(s.apps)))`, id).Scan(&allowed)
+	err = a.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM mail_queue q JOIN merchants m ON m.id=q.recipient_id JOIN notification_events e ON e.id=q.event_id JOIN notification_subscriptions s ON s.id=q.subscription_id WHERE q.id=$1 AND m.enabled AND s.merchant_id=m.id AND m.id=e.merchant_id AND s.email=q.recipient AND e.topic=ANY(s.topics) AND (e.app_id IS NULL OR e.app_id=ANY(s.apps))
+ AND (e.topic<>'device_offline_reminder' OR EXISTS(
+ SELECT 1 FROM devices d WHERE d.merchant_id=e.merchant_id AND NOT d.revoked
+ AND coalesce(d.last_seen,d.created_at)<now()-interval '3 minutes'
+ AND e.created_at>=coalesce(d.last_seen,d.created_at))))`, id).Scan(&allowed)
 	if err != nil {
 		return false
 	}
 	if !allowed {
-		_, _ = a.db.Exec(ctx, "UPDATE mail_queue SET status='cancelled',locked_until=NULL,last_error='订阅已变更' WHERE id=$1", id)
+		_, _ = a.db.Exec(ctx, "UPDATE mail_queue SET status='cancelled',locked_until=NULL,last_error='订阅已变更或设备已恢复/重置' WHERE id=$1", id)
 		return true
 	}
 	err = a.sendMail(ctx, s, to, subject, body)

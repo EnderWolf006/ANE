@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"strings"
 	"testing"
@@ -121,4 +122,55 @@ func TestOrderFilters(t *testing.T) {
 	if w.Code != 200 || strings.Contains(w.Body.String(), "filter_app") {
 		t.Fatal("filter choices leaked", w.Body.String())
 	}
+}
+
+func TestOrderSummaryAcrossPagesAndScopes(t *testing.T) {
+	a := testApp(t)
+	ctx := context.Background()
+	m := testMerchant(t, a, "summary", 5)
+	other := testMerchant(t, a, "summary_other", 5)
+	create(t, a, other, "outside_scope", "999.00")
+	h := session(t, a, m.Username, "merchant-password-123")
+	for i := 0; i < 35; i++ {
+		o := create(t, a, m, fmt.Sprintf("summary_%02d", i), "10.00")
+		_, err := a.db.Exec(ctx, "UPDATE orders SET status='paid',pay_amount=999,discount=1,callback_status='success' WHERE trade_no=$1", o.TradeNo)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	expired := create(t, a, m, "expired_summary", "20.00")
+	_, err := a.db.Exec(ctx, "UPDATE orders SET expires_at=now()-interval '1 minute' WHERE trade_no=$1", expired.TradeNo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type totals struct {
+		Orders   int
+		Paid     int
+		Revenue  int64 `json:"revenue_cents"`
+		Discount int64 `json:"discount_cents"`
+	}
+	check := func(query string, headers map[string]string, want totals, rows int) {
+		t.Helper()
+		w := request(t, a, "GET", "/api/manage/orders?"+query, nil, headers)
+		var result struct {
+			Data    []Order
+			Summary totals
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil || w.Code != 200 {
+			t.Fatal(w.Body.String(), err)
+		}
+		if result.Summary != want || len(result.Data) != rows {
+			t.Fatalf("%s: totals=%+v rows=%d want=%+v rows=%d", query, result.Summary, len(result.Data), want, rows)
+		}
+	}
+	check("page=1", h, totals{36, 35, 34965, 35}, 30)
+	check("page=2", h, totals{36, 35, 34965, 35}, 6)
+	check("page=9", h, totals{36, 35, 34965, 35}, 0)
+	check("status=paid&callback_status=success&app_id=default&discount=discounted&q=summary_&period=7d&start=2020-01-01T00%3A00%3A00Z&end=2030-01-01T00%3A00%3A00Z", h, totals{35, 35, 34965, 35}, 30)
+	check("status=expired", h, totals{1, 0, 0, 0}, 1)
+	check("q=no_matches", h, totals{}, 0)
+	check("", session(t, a, other.Username, "merchant-password-123"), totals{1, 0, 0, 0}, 1)
+	admin := session(t, a, "admin", "test-admin-password")
+	check("merchant_id="+fmt.Sprint(m.ID), admin, totals{36, 35, 34965, 35}, 30)
+	check("merchant_id=all", admin, totals{37, 35, 34965, 35}, 30)
 }

@@ -205,7 +205,7 @@ export function Status({ value }: { value: string }) {
         : "default";
   const live = value === "online" || value === "retrying";
   return (
-    <Chip size="sm" color={color} variant="soft" className="gap-1.5 font-medium">
+    <Chip size="sm" color={color} variant="soft" className="gap-1.5 whitespace-nowrap font-medium">
       <span className={"status-dot " + (live ? "is-live" : "")} />
       {names[value] || value}
     </Chip>
@@ -258,17 +258,19 @@ export function DataTable({
   rows,
   emptyTitle,
   emptyDescription,
+  className = "",
 }: {
   label: string;
   headers: string[];
   rows: ReactNode[][];
   emptyTitle?: string;
   emptyDescription?: string;
+  className?: string;
 }) {
   if (!rows.length)
     return <Empty title={emptyTitle} description={emptyDescription} />;
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-surface">
+    <div className={"ane-data-table overflow-hidden rounded-2xl border border-border bg-surface " + className}>
       <Table>
         <Table.ScrollContainer>
           <Table.Content aria-label={label} className="min-w-[640px]">

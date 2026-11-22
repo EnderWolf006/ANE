@@ -6,14 +6,12 @@ import {
   CheckCircle2,
   Clock3,
   Copy,
-  Moon,
   ShieldCheck,
-  Sun,
 } from "lucide-react";
 import { PaymentChannel } from "./PaymentChannel";
 import { api, money } from "./api";
 import { Loading, Notice } from "./components";
-import { useThemeMode } from "./theme";
+import { useSystemTheme } from "./theme";
 
 interface Payment {
   payment_type: "alipay" | "wxpay";
@@ -31,7 +29,7 @@ interface Payment {
 }
 
 export function Pay() {
-  const { resolved: theme, cycleMode } = useThemeMode();
+  useSystemTheme();
   const trade = location.pathname.split("/")[2];
   const [data, setData] = useState<Payment>(),
     [error, setError] = useState(""),
@@ -106,15 +104,6 @@ export function Pay() {
           </span>
           <span>ANE</span>
         </a>
-        <Button
-          isIconOnly
-          size="sm"
-          variant="ghost"
-          aria-label={theme === "dark" ? "切换到浅色模式" : "切换到深色模式"}
-          onPress={cycleMode}
-        >
-          {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-        </Button>
       </div>
 
       <Card className="pay-card">
@@ -150,7 +139,7 @@ export function Pay() {
                 </p>
 
                 <div className="payment-amount-box">
-                  <div className="flex items-center justify-center gap-2">
+                  <div className="payment-amount-row">
                     <div className="payment-amount">
                       {money(data.pay_amount_cents)}
                     </div>
@@ -161,6 +150,7 @@ export function Pay() {
                           isIconOnly
                           size="sm"
                           variant="secondary"
+                          className="payment-amount-copy"
                           aria-label="复制精确付款金额"
                           onPress={copyAmount}
                         >

@@ -74,3 +74,14 @@ export function useThemeMode() {
 
   return { mode, resolved, setMode, cycleMode };
 }
+
+// Checkout follows the OS without changing the saved management theme.
+export function useSystemTheme() {
+  useEffect(() => {
+    applyTheme("system");
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const listener = () => applyTheme("system");
+    media.addEventListener("change", listener);
+    return () => media.removeEventListener("change", listener);
+  }, []);
+}

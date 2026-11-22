@@ -94,7 +94,7 @@
       transparent 70%
     );
   --ane-sidebar-bg: color-mix(in oklab, var(--surface) 92%, var(--background) 8%);
-  --ane-topbar-bg: color-mix(in oklab, var(--surface) 84%, transparent);
+  --ane-topbar-bg: color-mix(in oklab, var(--surface) 72%, transparent);
   --ane-brand-glow: oklch(0.52 0.12 162 / 0.24);
   --ane-card-border-hover: oklch(0.82 0.035 160);
   --ane-qr-bg: #ffffff;
@@ -209,7 +209,7 @@
       transparent 72%
     );
   --ane-sidebar-bg: oklch(0.165 0.013 164);
-  --ane-topbar-bg: color-mix(in oklab, var(--surface) 82%, transparent);
+  --ane-topbar-bg: color-mix(in oklab, var(--surface) 72%, transparent);
   --ane-brand-glow: oklch(0.69 0.13 162 / 0.28);
   --ane-card-border-hover: oklch(0.4 0.04 162);
   --ane-qr-bg: #ffffff;
@@ -333,22 +333,6 @@ a:focus-visible {
   }
 }
 
-@keyframes ane-scan-line {
-  0% {
-    transform: translateY(0%);
-    opacity: 0;
-  }
-  12% {
-    opacity: 0.85;
-  }
-  88% {
-    opacity: 0.85;
-  }
-  100% {
-    transform: translateY(100%);
-    opacity: 0;
-  }
-}
 
 @keyframes ane-pop-in {
   0% {
@@ -609,8 +593,8 @@ a:focus-visible {
   height: 64px;
   border-bottom: 1px solid var(--border);
   background: var(--ane-topbar-bg);
-  backdrop-filter: blur(14px) saturate(1.4);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1472,7 +1456,7 @@ a:focus-visible {
 
 .pay-topbar {
   width: 100%;
-  max-width: 460px;
+  max-width: 500px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1491,7 +1475,7 @@ a:focus-visible {
 
 .pay-card {
   width: 100%;
-  max-width: 460px;
+  max-width: 500px;
   padding: 22px !important;
   background: var(--surface) !important;
   box-shadow: var(--overlay-shadow) !important;
@@ -1532,23 +1516,6 @@ a:focus-visible {
   overflow: hidden;
 }
 
-.payment-qr-stage::after {
-  content: "";
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  top: 0;
-  height: 32%;
-  background: linear-gradient(
-    to bottom,
-    transparent,
-    color-mix(in oklab, var(--accent) 22%, transparent),
-    color-mix(in oklab, var(--accent) 65%, transparent)
-  );
-  border-bottom: 2px solid var(--accent);
-  pointer-events: none;
-  animation: ane-scan-line 3.4s ease-in-out infinite;
-}
 
 .payment-qr {
   width: 100%;
@@ -1871,3 +1838,15 @@ a:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/* One outer table border clips the header and rows to the same radius. */
+.ane-data-table .table-root { padding: 0; border-radius: 0; background: transparent; }
+.ane-data-table .table__content { border-spacing: 0; }
+.ane-data-table .table__column,
+.ane-data-table .table__cell { border-radius: 0 !important; }
+.ane-data-table .table__column { white-space: nowrap; }
+.mail-history-table .table__cell:not(:first-child) { white-space: nowrap; }
+.mail-history-table .table__cell:first-child { width: 34%; min-width: 160px; max-width: 320px; overflow-wrap: anywhere; }
+.payment-amount-row { position: relative; padding-inline: 36px; text-align: center; }
+.payment-amount-copy { position: absolute; right: -4px; top: 50%; transform: translateY(-50%); }
+@media (max-width: 380px) { .payment-amount { font-size: 34px; } }

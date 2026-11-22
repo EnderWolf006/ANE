@@ -507,7 +507,7 @@ export function Orders(p: PageProps) {
 
   const r = useLoad(
     () =>
-      api<{ data: Order[]; has_more: boolean }>(
+      api<{ data: Order[]; has_more: boolean; summary: { orders: number; paid: number; revenue_cents: number; discount_cents: number } }>(
         scoped("orders?" + paramsForOrders(), p.merchant),
       ),
     [p.refresh, p.merchant, page, search, filters],
@@ -661,6 +661,23 @@ export function Orders(p: PageProps) {
               ]}
             />
           </div>
+        </div>
+
+        <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4" aria-label="筛选范围汇总" aria-busy={r.loading}>
+          {[
+            ["订单总数", r.data?.summary.orders],
+            ["已支付订单", r.data?.summary.paid],
+            ["实收金额", r.data ? money(r.data.summary.revenue_cents) : undefined],
+            ["优惠金额", r.data ? money(r.data.summary.discount_cents) : undefined],
+          ].map(([label, value]) => (
+            <Card key={label} className="border border-border bg-surface-secondary p-4 shadow-none">
+              <Card.Content>
+                <p className="text-xs text-muted">{label}<span className="ml-2 text-[10px]">筛选范围内</span></p>
+                <p className="mt-2 text-xl font-semibold tabular-nums">{r.loading ? "—" : value ?? "—"}</p>
+                {(label === "实收金额" || label === "优惠金额") && <p className="mt-1 text-[10px] text-muted">仅统计已支付订单</p>}
+              </Card.Content>
+            </Card>
+          ))}
         </div>
 
         {apps.error && (
@@ -1417,7 +1434,7 @@ export function SettingsPage(p: PageProps) {
                         <div className="min-w-0">
                           <label className="file-button">
                             <Upload size={14} />
-                            选择图片
+                            上传
                             <input
                               type="file"
                               aria-label={channel + "收款码"}

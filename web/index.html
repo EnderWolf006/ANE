@@ -9,7 +9,8 @@
     <script>
       (function () {
         try {
-          var mode = localStorage.getItem("ane-theme") || "system";
+          var mode = location.pathname.startsWith("/pay/")
+            ? "system" : localStorage.getItem("ane-theme") || "system";
           var dark =
             mode === "dark" ||
             (mode === "system" &&

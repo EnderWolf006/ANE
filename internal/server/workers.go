@@ -142,6 +142,27 @@ func (a *App) maintenance(ctx context.Context) error {
 					return e
 				}
 			}
+			// The merchant lock serializes reminder creation across worker instances.
+			// Existing events retain the hourly cadence across service restarts.
+			var remind bool
+			e = tx.QueryRow(ctx, `SELECT EXISTS(
+ SELECT 1 FROM devices d JOIN merchants m ON m.id=d.merchant_id
+ WHERE d.merchant_id=$1 AND m.enabled AND NOT d.revoked
+ AND coalesce(d.last_seen,d.created_at)<now()-interval '3 minutes'
+ AND EXISTS(SELECT 1 FROM notification_subscriptions s WHERE s.merchant_id=d.merchant_id AND 'device_offline_reminder'=ANY(s.topics))
+ AND coalesce((SELECT max(e.created_at) FROM notification_events e
+   WHERE e.merchant_id=d.merchant_id AND e.topic IN ('device_offline','device_offline_reminder')
+   AND e.created_at>=coalesce(d.last_seen,d.created_at)),
+   coalesce(d.last_seen,d.created_at)+interval '3 minutes')<=now()-interval '1 hour'
+)`, id).Scan(&remind)
+			if e != nil {
+				return e
+			}
+			if remind {
+				if e = queueNotification(ctx, tx, id, "device_offline_reminder", token(), "离线持续通知", "设备仍处于离线状态；离线期间每小时提醒一次，恢复心跳后停止。"); e != nil {
+					return e
+				}
+			}
 			return tx.Commit(ctx)
 		}()
 		if err != nil {
