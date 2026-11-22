@@ -1,5 +1,7 @@
 # ANE
 
+![Static Badge](https://img.shields.io/badge/LinuxDO-_Community-blue?link=https%3A%2F%2Flinux.do%2F)
+
 <p align="center">
   <img src="web/public/assets/ane-logo.png" alt="ANE" width="280">
 </p>
