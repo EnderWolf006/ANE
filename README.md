@@ -4,7 +4,7 @@
   <img src="web/public/assets/ane-logo.png" alt="ANE" width="280">
 </p>
 
-ANE （Automated Notification-Driven Epay 是一个自托管的收款订单匹配服务。Android 设备监听支付宝和微信的收款通知，服务端按渠道、实付金额和订单有效期匹配订单，再向业务系统发送易支付回调。
+ANE （Automated Notification-Driven Epay） 是一个自托管的收款订单匹配服务。Android 设备监听支付宝和微信的收款通知，服务端按渠道、实付金额和订单有效期匹配订单，再向业务系统发送易支付回调。
 
 ANE 使用你自己的固定收款码，不代收资金，也不调用官方支付 API。
 
