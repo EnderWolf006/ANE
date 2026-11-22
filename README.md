@@ -8,6 +8,8 @@ ANE （Automated Notification-Driven Epay 是一个自托管的收款订单匹�
 
 ANE 使用你自己的固定收款码，不代收资金，也不调用官方支付 API。
 
+![ANE 管理工作台演示：交易汇总与监听设备状态](docs/images/dashboard.png)
+
 ## 可以做什么
 
 - 接收支付宝个人、支付宝商家和微信收款助手的系统通知，支持经典易支付 MD5 协议。
