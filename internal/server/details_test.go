@@ -108,46 +108,6 @@ func TestSMTPPromptEndpoint(t *testing.T) {
 		t.Fatal("missing delivery error", w.Body.String())
 	}
 }
-func TestUpgradeV2PreservesOrders(t *testing.T) {
-	a := testApp(t)
-	ctx := context.Background()
-	m := testMerchant(t, a, "upgrade", 3)
-	_ = create(t, a, m, "zero", "10.00")
-	old := create(t, a, m, "old", "10.00")
-	downgradeV5Fixture(t, a)
-	// Reconstruct v2 shape in this isolated schema while retaining a pre-upgrade paid/discounted order.
-	_, err := a.db.Exec(ctx, `DROP TABLE merchant_apps;
- DELETE FROM orders WHERE discount=0;
- ALTER TABLE merchants DROP COLUMN payment_note;
- ALTER TABLE devices DROP COLUMN wifi_ssid;
- ALTER TABLE orders DROP COLUMN payment_note;
- ALTER TABLE orders DROP CONSTRAINT orders_amount_check,DROP CONSTRAINT orders_check,DROP CONSTRAINT orders_discount_check;
- ALTER TABLE orders ADD CONSTRAINT orders_amount_check CHECK(amount>1),ADD CONSTRAINT orders_check CHECK(pay_amount>0 AND pay_amount<amount),ADD CONSTRAINT orders_discount_check CHECK(discount>0);
- UPDATE schema_version SET version=2;`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	upgraded, err := New(ctx, a.cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer upgraded.Close()
-	var version int
-	_ = upgraded.db.QueryRow(ctx, "SELECT max(version) FROM schema_version").Scan(&version)
-	if version != 7 {
-		t.Fatal(version)
-	}
-	var pay int64
-	_ = upgraded.db.QueryRow(ctx, "SELECT pay_amount FROM orders WHERE trade_no=$1", old.TradeNo).Scan(&pay)
-	if pay != 999 {
-		t.Fatal("old order changed", pay)
-	}
-	m, _ = upgraded.merchant(ctx, m.ID)
-	if next := create(t, upgraded, m, "after", "10.00"); next.Discount != 0 {
-		t.Fatal("zero slot not added")
-	}
-}
-
 func TestPaymentNoteColorsAndFontSizes(t *testing.T) {
 	for _, tc := range []struct {
 		name, input string

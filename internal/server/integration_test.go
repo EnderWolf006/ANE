@@ -556,23 +556,67 @@ func TestConcurrentFirstDeviceBinding(t *testing.T) {
 	}
 }
 
-func TestRejectOldSchemaWithoutMutation(t *testing.T) {
+func TestStartupKeepsCurrentDatabase(t *testing.T) {
 	a := testApp(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx := context.Background()
+	var adminKey string
+	if err := a.db.QueryRow(ctx, `SELECT a.merchant_key FROM merchant_apps a
+ JOIN merchants m ON m.id=a.merchant_id WHERE m.is_admin AND a.name='default'`).Scan(&adminKey); err != nil || !strings.HasSuffix(adminKey, "_default") {
+		t.Fatal("fresh install did not create the default admin app", err)
+	}
+	m := testMerchant(t, a, "restart", 3)
+	order := create(t, a, m, "existing", "10.00")
+	if _, err := a.db.Exec(ctx, "UPDATE merchant_apps SET deleted_at=now() WHERE merchant_id=$1", m.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	restarted, err := New(ctx, a.cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restarted.Close()
+	var gotKey string
+	if err = restarted.db.QueryRow(ctx, "SELECT merchant_key FROM merchant_apps WHERE merchant_id=$1 AND deleted_at IS NOT NULL", m.ID).Scan(&gotKey); err != nil || gotKey != m.Key {
+		t.Fatal("restart changed the app", err)
+	}
+	got, err := scanOrder(restarted.db.QueryRow(ctx, "SELECT "+orderColumns+" FROM orders WHERE trade_no=$1", order.TradeNo))
+	if err != nil || got.PayAmount != order.PayAmount || got.Status != order.Status {
+		t.Fatal("restart changed the order", err)
+	}
+}
+
+func TestUnsupportedDatabaseIsNotModified(t *testing.T) {
+	a := testApp(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, err := a.db.Exec(ctx, "UPDATE schema_version SET version=1"); err != nil {
+	for _, version := range []int{1, 2, 3, 4, 5, 6, databaseSchemaVersion + 1} {
+		t.Run(fmt.Sprint(version), func(t *testing.T) {
+			if _, err := a.db.Exec(ctx, "UPDATE schema_version SET version=$1", version); err != nil {
+				t.Fatal(err)
+			}
+			another, err := New(ctx, a.cfg)
+			if another != nil {
+				another.Close()
+				t.Fatal("unsupported database accepted")
+			}
+			if err == nil || !strings.Contains(err.Error(), "unsupported ANE database schema") {
+				t.Fatal(err)
+			}
+			var got int
+			if err := a.db.QueryRow(ctx, "SELECT version FROM schema_version").Scan(&got); err != nil || got != version {
+				t.Fatal("unsupported database was modified", got, err)
+			}
+		})
+	}
+	if _, err := a.db.Exec(ctx, "DROP TABLE schema_version"); err != nil {
 		t.Fatal(err)
 	}
 	another, err := New(ctx, a.cfg)
 	if another != nil {
 		another.Close()
-		t.Fatal("old schema accepted")
+		t.Fatal("nonempty unrecognized database accepted")
 	}
-	if err == nil || !strings.Contains(err.Error(), "requires a new empty database") {
+	if err == nil || !strings.Contains(err.Error(), "requires an empty schema") {
 		t.Fatal(err)
-	}
-	var version int
-	if err := a.db.QueryRow(ctx, "SELECT version FROM schema_version").Scan(&version); err != nil || version != 1 {
-		t.Fatal("old database was modified", version, err)
 	}
 }

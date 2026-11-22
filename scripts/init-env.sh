@@ -2,7 +2,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 if [ -e .env ]; then
-  echo '.env 已存在，未覆盖。ANE v2 需配置 PG_URI，商户设置请在 Web 面板管理。'
+  echo '.env 已存在，未覆盖。请确认 PG_URI，商户设置请在 Web 面板管理。'
   exit 0
 fi
 umask 077

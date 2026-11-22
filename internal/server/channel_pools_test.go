@@ -12,24 +12,6 @@ import (
 	"github.com/ane/ane/internal/core"
 )
 
-// Rebuild schema 6's shared pool and uniqueness constraint for upgrade fixtures.
-func downgradeV7Fixture(t *testing.T, a *App) {
-	t.Helper()
-	_, err := a.db.Exec(context.Background(), `INSERT INTO amount_pools(merchant_id,payment_type,amount,capacity)
- SELECT merchant_id,'alipay',amount,max(capacity) FROM amount_pools GROUP BY merchant_id,amount
- ON CONFLICT(merchant_id,payment_type,amount) DO UPDATE SET capacity=excluded.capacity;
- DELETE FROM amount_pools WHERE payment_type<>'alipay';
- ALTER TABLE amount_pools DROP CONSTRAINT amount_pools_pkey;
- ALTER TABLE amount_pools DROP COLUMN payment_type;
- ALTER TABLE amount_pools ADD PRIMARY KEY(merchant_id,amount);
- DROP INDEX active_pay_amount;
- CREATE UNIQUE INDEX active_pay_amount ON orders(merchant_id,pay_amount) WHERE status='pending';
- UPDATE schema_version SET version=6;`)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 func wechatMerchant(t *testing.T, a *App, name string, limit int) Merchant {
 	t.Helper()
 	m := testMerchant(t, a, name, limit)
@@ -183,56 +165,4 @@ func TestChannelPoolsConcurrentAllocationSharedByApplications(t *testing.T) {
 			t.Fatal("applications did not share channel pool", channel, amounts)
 		}
 	}
-}
-
-func TestV7MigrationPreservesOrdersAndSplitsLivePools(t *testing.T) {
-	a := testApp(t)
-	ctx := context.Background()
-	m := wechatMerchant(t, a, "migration7", 5)
-	ali := createChannel(t, a, m, "old_ali", "10.00", "alipay")
-	temporary := createChannel(t, a, m, "temporary", "10.00", "wxpay")
-	wx := createChannel(t, a, m, "old_wx", "10.00", "wxpay")
-	if _, err := a.db.Exec(ctx, "DELETE FROM orders WHERE trade_no=$1", temporary.TradeNo); err != nil {
-		t.Fatal(err)
-	}
-	h := session(t, a, m.Username, "merchant-password-123")
-	downgradeV7Fixture(t, a)
-	// The old cross-channel allocator gave WeChat a discount even though Alipay held the original price.
-	if wx.PayAmount != 999 {
-		t.Fatal(wx)
-	}
-	var before string
-	if err := a.db.QueryRow(ctx, "SELECT json_agg(to_jsonb(o) ORDER BY trade_no)::text FROM orders o").Scan(&before); err != nil {
-		t.Fatal(err)
-	}
-	upgraded, err := New(ctx, a.cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer upgraded.Close()
-	var after string
-	if err := upgraded.db.QueryRow(ctx, "SELECT json_agg(to_jsonb(o) ORDER BY trade_no)::text FROM orders o").Scan(&after); err != nil || before != after {
-		t.Fatal("migration changed existing orders", err)
-	}
-	var version int
-	if err := upgraded.db.QueryRow(ctx, "SELECT max(version) FROM schema_version").Scan(&version); err != nil || version != 7 {
-		t.Fatal(version, err)
-	}
-	for channel, want := range map[string]int{"alipay": 1, "wxpay": 2} {
-		var got int
-		if err := upgraded.db.QueryRow(ctx, "SELECT capacity FROM amount_pools WHERE merchant_id=$1 AND payment_type=$2 AND amount=1000", m.ID, channel).Scan(&got); err != nil || got != want {
-			t.Fatal("migrated capacity", channel, got, err)
-		}
-	}
-	if w := request(t, upgraded, "GET", "/api/manage/pools", nil, h); w.Code != 200 {
-		t.Fatal("session lost", w.Body.String())
-	}
-	if next := createChannel(t, upgraded, m, "new_wx", "10.00", "wxpay"); next.PayAmount != ali.PayAmount {
-		t.Fatal("new order did not reuse original price within its channel", next)
-	}
-	restarted, err := New(ctx, a.cfg)
-	if err != nil {
-		t.Fatal("schema 7 restart", err)
-	}
-	restarted.Close()
 }

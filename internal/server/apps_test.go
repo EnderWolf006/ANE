@@ -94,37 +94,6 @@ func TestAppsSharePoolAndScopeOrders(t *testing.T) {
 	}
 }
 
-func TestUpgradeV3ScopesExistingOrderNumbers(t *testing.T) {
-	a := testApp(t)
-	m := testMerchant(t, a, "upgrade_apps", 3)
-	old := create(t, a, m, "existing", "10.00")
-	ctx := context.Background()
-	downgradeV5Fixture(t, a)
-	_, err := a.db.Exec(ctx, `DROP TABLE merchant_apps;
-ALTER TABLE orders DROP CONSTRAINT orders_merchant_id_app_id_out_trade_no_key;
-ALTER TABLE orders DROP COLUMN app_id, DROP COLUMN username;
-ALTER TABLE orders ADD CONSTRAINT orders_merchant_id_out_trade_no_key UNIQUE(merchant_id,out_trade_no);
-UPDATE schema_version SET version=3`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	upgraded, err := New(ctx, a.cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer upgraded.Close()
-	v := values("existing", "10.00")
-	_, err = upgraded.db.Exec(ctx, "INSERT INTO merchant_apps(merchant_id,name,merchant_key) VALUES($1,'other','secret_other')", m.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	m.AppID, m.Key = "other", "secret_other"
-	next, err := upgraded.createOrder(ctx, m, v)
-	if err != nil || next.TradeNo == old.TradeNo || next.PayAmount != 999 {
-		t.Fatalf("migration: %+v %v", next, err)
-	}
-}
-
 func TestMailHistoryFiltersAndPagination(t *testing.T) {
 	a := testApp(t)
 	m := testMerchant(t, a, "mailuser", 3)

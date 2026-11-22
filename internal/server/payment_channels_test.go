@@ -10,21 +10,6 @@ import (
 	"time"
 )
 
-// Reconstruct schema 5 so upgrade tests exercise the real destructive cleanup.
-func downgradeV6Fixture(t *testing.T, a *App) {
-	t.Helper()
-	downgradeV7Fixture(t, a)
-	_, err := a.db.Exec(context.Background(), `ALTER TABLE merchants DROP COLUMN wechat_qr_image;
- ALTER TABLE orders DROP COLUMN payment_type;
- ALTER TABLE events DROP COLUMN payment_type;
- ALTER TABLE orders ADD COLUMN username text NOT NULL DEFAULT '';
- ALTER TABLE events ADD COLUMN payer text NOT NULL DEFAULT '';
- UPDATE schema_version SET version=5;`)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestWechatChannelsKeepQRCallbackAndNotificationIsolated(t *testing.T) {
 	a := testApp(t)
 	ctx := context.Background()
@@ -116,54 +101,4 @@ func TestWechatChannelsKeepQRCallbackAndNotificationIsolated(t *testing.T) {
 	if w = request(t, a, "GET", "/mapi.php?"+v.Encode(), nil, nil); w.Code != 409 {
 		t.Fatal("idempotent order channel changed", w.Body.String())
 	}
-}
-
-func TestV6MigrationErasesTransactionUsernamesAndPreservesBusiness(t *testing.T) {
-	a := testApp(t)
-	ctx := context.Background()
-	m := testMerchant(t, a, "migration6", 5)
-	o := create(t, a, m, "old", "10.00")
-	h := session(t, a, m.Username, "merchant-password-123")
-	_ = request(t, a, "POST", "/api/manage/subscriptions", map[string]any{"email": "old@example.test", "topics": []string{"payment_received"}, "apps": []string{"default"}}, h)
-	dev := device(t, a, m)
-	if w := notice(t, a, o, dev, time.Now()); w.Code != 200 {
-		t.Fatal(w.Body.String())
-	}
-	downgradeV6Fixture(t, a)
-	_, err := a.db.Exec(ctx, `UPDATE orders SET username='private_business_name'; UPDATE events SET payer='private_payer_name',raw_text='private_payer_name通过扫码向你付款10元';
- UPDATE notification_events SET title='private_payer_name 成功支付',message='private_business_name private_payer_name';
- UPDATE mail_queue SET subject='private_payer_name 成功支付',body='private_business_name private_payer_name';`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	upgraded, err := New(ctx, a.cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer upgraded.Close()
-	got, err := scanOrder(upgraded.db.QueryRow(ctx, "SELECT "+orderColumns+" FROM orders WHERE trade_no=$1", o.TradeNo))
-	if err != nil || got.Key != o.Key || got.PayAmount != o.PayAmount || got.PaymentType != "alipay" || got.Status != "paid" {
-		t.Fatal(got, err)
-	}
-	var leaked bool
-	err = upgraded.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND ((table_name='orders' AND column_name='username') OR (table_name='events' AND column_name='payer')))
- OR EXISTS(SELECT 1 FROM events WHERE raw_text LIKE '%private_%')
- OR EXISTS(SELECT 1 FROM notification_events WHERE title LIKE '%private_%' OR message LIKE '%private_%')
- OR EXISTS(SELECT 1 FROM mail_queue WHERE subject LIKE '%private_%' OR body LIKE '%private_%')`).Scan(&leaked)
-	if err != nil || leaked {
-		t.Fatal("username cleanup incomplete", err)
-	}
-	if w := request(t, upgraded, "GET", "/api/manage/me", nil, h); w.Code != 200 || !strings.Contains(w.Body.String(), m.Username) {
-		t.Fatal("login or session lost", w.Body.String())
-	}
-	// Old Android may retry the original text after the server has removed it.
-	retry := EventInput{NotificationID: "alipay:" + o.TradeNo, Package: core.AlipayPackage, Text: "张**通过扫码向你付款10.00元", PostedAt: got.PaidAt.UnixMilli()}
-	if w := request(t, upgraded, "POST", "/api/device/events", retry, dev); w.Code != 200 || !strings.Contains(w.Body.String(), `"duplicate":true`) {
-		t.Fatal("legacy retry", w.Body.String())
-	}
-	again, err := New(ctx, a.cfg)
-	if err != nil {
-		t.Fatal("restart", err)
-	}
-	again.Close()
 }

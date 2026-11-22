@@ -23,8 +23,10 @@ import (
 	"time"
 )
 
-//go:embed schema.sql migrate_v3.sql migrate_v4.sql migrate_v5.sql migrate_v6.sql migrate_v7.sql web
+//go:embed schema.sql web
 var files embed.FS
+
+const databaseSchemaVersion = 7
 
 type App struct {
 	cfg            Config
@@ -62,65 +64,33 @@ func New(ctx context.Context, c Config) (*App, error) {
 		return failNew(err)
 	}
 	var exists bool
-	if err = tx.QueryRow(ctx, "SELECT to_regclass('schema_version') IS NOT NULL").Scan(&exists); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT to_regclass(format('%I.schema_version', current_schema())) IS NOT NULL").Scan(&exists); err != nil {
 		return failNew(err)
 	}
 	if exists {
-		var version int
-		if err = tx.QueryRow(ctx, "SELECT max(version) FROM schema_version").Scan(&version); err != nil {
+		var supported bool
+		if err = tx.QueryRow(ctx, "SELECT count(*)=1 AND coalesce(min(version)=$1,false) FROM schema_version", databaseSchemaVersion).Scan(&supported); err != nil {
 			return failNew(err)
 		}
-		if version != 2 && version != 3 && version != 4 && version != 5 && version != 6 && version != 7 {
-			return failNew(errors.New("ANE v2 requires a new empty database; existing schema is not modified"))
+		if !supported {
+			return failNew(fmt.Errorf("unsupported ANE database schema (expected %d); use an empty database for a fresh install", databaseSchemaVersion))
 		}
-		if version == 2 {
-			migration, _ := files.ReadFile("migrate_v3.sql")
-			if _, err = tx.Exec(ctx, string(migration)); err != nil {
-				return failNew(err)
-			}
+	} else {
+		var nonempty bool
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_class
+ WHERE relnamespace=current_schema()::regnamespace AND relkind IN ('r','p','v','m','f'))`).Scan(&nonempty); err != nil {
+			return failNew(err)
 		}
-		if version == 2 || version == 3 {
-			// Give up promptly if live traffic holds a table lock during an upgrade.
-			if _, err = tx.Exec(ctx, "SET LOCAL lock_timeout='5s'"); err != nil {
-				return failNew(err)
-			}
-			migration, _ := files.ReadFile("migrate_v4.sql")
-			if _, err = tx.Exec(ctx, string(migration)); err != nil {
-				return failNew(err)
-			}
+		if nonempty {
+			return failNew(errors.New("ANE requires an empty schema for a fresh install"))
 		}
-		if version <= 4 {
-			if _, err = tx.Exec(ctx, "SET LOCAL lock_timeout='5s'"); err != nil {
-				return failNew(err)
-			}
-			migration, _ := files.ReadFile("migrate_v5.sql")
-			if _, err = tx.Exec(ctx, string(migration)); err != nil {
-				return failNew(err)
-			}
+		schema, e := files.ReadFile("schema.sql")
+		if e != nil {
+			return failNew(e)
 		}
-		if version <= 5 {
-			if _, err = tx.Exec(ctx, "SET LOCAL lock_timeout='5s'"); err != nil {
-				return failNew(err)
-			}
-			migration, _ := files.ReadFile("migrate_v6.sql")
-			if _, err = tx.Exec(ctx, string(migration)); err != nil {
-				return failNew(err)
-			}
+		if _, err = tx.Exec(ctx, string(schema)); err != nil {
+			return failNew(err)
 		}
-		if version <= 6 {
-			if _, err = tx.Exec(ctx, "SET LOCAL lock_timeout='5s'"); err != nil {
-				return failNew(err)
-			}
-			migration, _ := files.ReadFile("migrate_v7.sql")
-			if _, err = tx.Exec(ctx, string(migration)); err != nil {
-				return failNew(err)
-			}
-		}
-	}
-
-	schema, _ := files.ReadFile("schema.sql")
-	if _, err = tx.Exec(ctx, string(schema)); err != nil {
-		return failNew(err)
 	}
 	var id int64
 	var username, hash string
@@ -130,7 +100,11 @@ func New(ctx context.Context, c Config) (*App, error) {
 		if e != nil {
 			return failNew(e)
 		}
-		_, err = tx.Exec(ctx, "INSERT INTO merchants(username,name,password_hash,is_admin,merchant_key) VALUES($1,'管理员',$2,true,$3)", c.AdminUser, string(h), token()+"_default")
+		_, err = tx.Exec(ctx, `WITH m AS (
+ INSERT INTO merchants(username,name,password_hash,is_admin,merchant_key)
+ VALUES($1,'管理员',$2,true,$3) RETURNING id,merchant_key,payment_note
+) INSERT INTO merchant_apps(merchant_id,name,merchant_key,payment_note)
+ SELECT id,'default',merchant_key,payment_note FROM m`, c.AdminUser, string(h), token()+"_default")
 	} else if err == nil && (username != c.AdminUser || bcrypt.CompareHashAndPassword([]byte(hash), []byte(c.AdminPassword)) != nil) {
 		h, e := bcrypt.GenerateFromPassword([]byte(c.AdminPassword), bcrypt.DefaultCost)
 		if e != nil {
@@ -143,11 +117,6 @@ func New(ctx context.Context, c Config) (*App, error) {
 	}
 	if err != nil {
 		return failNew(err)
-	}
-	if !exists {
-		if _, err = tx.Exec(ctx, "INSERT INTO merchant_apps(merchant_id,name,merchant_key,payment_note) SELECT id,'default',merchant_key,payment_note FROM merchants"); err != nil {
-			return failNew(err)
-		}
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return failNew(err)

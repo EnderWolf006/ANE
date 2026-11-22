@@ -1,0 +1,100 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    name: Web and Linux server
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: ane
+          POSTGRES_PASSWORD: ci-test-password
+          POSTGRES_DB: ane_test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U ane -d ane_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.25.x'
+      - name: Test and build Web
+        working-directory: web
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - name: Test server against PostgreSQL
+        env:
+          TEST_DATABASE_URL: postgres://ane:ci-test-password@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/ane_test?sslmode=disable
+        run: |
+          go vet ./...
+          go test -race ./... -count=1
+      - name: Package Linux binaries with embedded Web assets
+        run: |
+          mkdir -p dist/server
+          for arch in amd64 arm64; do
+            mkdir -p "dist/bin/$arch"
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -ldflags="-s -w" -o "dist/bin/$arch/ane" ./cmd/ane
+            tar -czf "dist/server/ane-linux-$arch.tar.gz" -C "dist/bin/$arch" ane
+          done
+          cd dist/server
+          sha256sum ane-linux-amd64.tar.gz ane-linux-arm64.tar.gz > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ane-server-linux
+          path: dist/server/
+          if-no-files-found: error
+
+  android:
+    name: Android APKs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Install Android SDK components
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0' 'build-tools;36.0.0'
+      - name: Test and build Android
+        working-directory: android
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintRelease :app:assembleDebug :app:assembleRelease
+      - name: Package APKs and checksums
+        run: |
+          mkdir -p dist/android
+          cp android/app/build/outputs/apk/debug/app-debug.apk dist/android/ANE-debug.apk
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk dist/android/ANE-release-unsigned.apk
+          cd dist/android
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify ANE-debug.apk
+          sha256sum ANE-debug.apk ANE-release-unsigned.apk > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ane-android
+          path: dist/android/
+          if-no-files-found: error
