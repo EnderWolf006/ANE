@@ -1302,7 +1302,9 @@ a:focus-visible {
 }
 
 .order-summary-pill[data-tone="accent"] { --summary-marker: var(--accent); }
-.order-summary-pill[data-tone="success"] { --summary-marker: var(--success); }
+.order-summary-pill[data-tone="paid"] { --summary-marker: oklch(0.62 0.15 298); }
+.order-summary-pill[data-tone="alipay"] { --summary-marker: #1677ff; }
+.order-summary-pill[data-tone="wechat"] { --summary-marker: #07c160; }
 .order-summary-pill[data-tone="warning"] { --summary-marker: var(--warning); }
 .order-summary-pill dt {
   display: flex;

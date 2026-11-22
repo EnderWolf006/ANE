@@ -491,10 +491,10 @@ function OrderSummaryPills({ summary, loading }: { summary?: OrderSummary; loadi
   const currency = (cents?: number) => cents === undefined ? undefined : money(cents);
   const metrics = [
     { label: "订单总数", value: summary?.orders },
-    { label: "已支付订单", value: summary?.paid, tone: "success" },
+    { label: "已支付订单", value: summary?.paid, tone: "paid" },
     { label: "实收总金额", value: currency(summary?.revenue_cents), tone: "accent" },
-    { label: "支付宝实收", channel: "alipay", value: currency(summary?.alipay_revenue_cents), tone: "accent" },
-    { label: "微信实收", channel: "wxpay", value: currency(summary?.wxpay_revenue_cents), tone: "success" },
+    { label: "支付宝实收", channel: "alipay", value: currency(summary?.alipay_revenue_cents), tone: "alipay" },
+    { label: "微信实收", channel: "wxpay", value: currency(summary?.wxpay_revenue_cents), tone: "wechat" },
     { label: "优惠总金额", value: currency(summary?.discount_cents), tone: "warning" },
   ] as const;
 
